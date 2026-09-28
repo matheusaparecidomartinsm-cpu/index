@@ -95,7 +95,7 @@ textarea{font:13px/1.5 "JetBrains Mono",monospace;color:var(--ink);background:va
 .xl{overflow-x:auto;border:1px solid #7f7f7f}
 table.os{border-collapse:collapse;width:100%;min-width:900px;font:13px Calibri,Arial,sans-serif;color:#000}
 table.os th{background:#002060;color:#FFFF00;font-weight:700;text-align:center;padding:4px 8px;border:1px solid #7f7f7f;text-transform:none;letter-spacing:0;font-size:13px}
-table.os td{background:#FFFF00;color:#000;font-weight:700;border:1px solid #7f7f7f;padding:8px;vertical-align:middle;text-align:center}
+table.os td{background:#FFFF00;color:#000;font:700 8pt/1.35 Tahoma,Verdana,sans-serif;border:1px solid #7f7f7f;padding:8px;vertical-align:middle;text-align:center}
 table.os td.nm{text-align:left;white-space:pre-wrap;vertical-align:top;min-width:380px}
 table.os td[contenteditable]:focus{outline:2px solid #002060;outline-offset:-2px}
 .ref{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13.5px;display:grid;gap:8px}
@@ -532,8 +532,8 @@ mmout.addEventListener('click',async e=>{
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
   const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;ITEMS.forEach(i=>{if(NOVOS[i.cod]&&i._g)saveNovo(i);});const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
   const cells=[...tb.querySelectorAll('td')].map(td=>td.innerText.trim());
-  const st='font-family:Calibri,Arial;font-size:11pt;font-weight:bold;border:1px solid #7f7f7f;vertical-align:middle;';
-  const htmlT=`<table style="border-collapse:collapse"><tr>${['Faca','Nome','Tipo Papel','Impressão','Lado Papel','Caixa De Embarque'].map(h=>`<th style="${st}background:#002060;color:#FFFF00;text-align:center">${h}</th>`).join('')}</tr><tr>${cells.map((c,k)=>`<td style="${st}background:#FFFF00;text-align:${k===1?'left':'center'};white-space:pre-wrap">${esc(c).replace(/\n/g,'<br style="mso-data-placement:same-cell">')}</td>`).join('')}</tr></table>`;
+  const st='font-weight:bold;border:1px solid #7f7f7f;vertical-align:middle;';const hs='font-family:Calibri,Arial;font-size:11pt;';const cs='font-family:Tahoma,Verdana,sans-serif;font-size:8pt;';
+  const htmlT=`<table style="border-collapse:collapse"><tr>${['Faca','Nome','Tipo Papel','Impressão','Lado Papel','Caixa De Embarque'].map(h=>`<th style="${st}${hs}background:#002060;color:#FFFF00;text-align:center">${h}</th>`).join('')}</tr><tr>${cells.map((c,k)=>`<td style="${st}${cs}background:#FFFF00;text-align:${k===1?'left':'center'};white-space:pre-wrap">${esc(c).replace(/\n/g,'<br style="mso-data-placement:same-cell">')}</td>`).join('')}</tr></table>`;
   const tsv='Faca\tNome\tTipo Papel\tImpressão\tLado Papel\tCaixa De Embarque\n'+cells.map(c=>/\n/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join('\t');
   try{if(window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([htmlT],{type:'text/html'}),'text/plain':new Blob([tsv],{type:'text/plain'})})]);}else{await navigator.clipboard.writeText(tsv);}msg.textContent='Copiado. Cole na planilha.';}
   catch(err){try{await navigator.clipboard.writeText(tsv);msg.textContent='Copiado como texto.';}catch(e2){const r=document.createRange();r.selectNodeContents(tb);const s=getSelection();s.removeAllRanges();s.addRange(r);msg.textContent='Tabela selecionada. Use Ctrl+C.';}}
