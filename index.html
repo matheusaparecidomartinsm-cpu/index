@@ -145,6 +145,7 @@ td{border-bottom-color:var(--line)}
 input[type=checkbox]{accent-color:#2DD4BF}
 .sub,.src,.count{color:var(--muted)}
 select.role{font:600 12.5px "Manrope",system-ui,sans-serif;padding:3px 8px;border-radius:999px;background:var(--sunk);color:var(--ink);border:1px solid var(--line)}
+label.chk.novo{white-space:nowrap}
 @media (max-width:560px){.card>summary{grid-template-columns:1fr}.meta{grid-column:1}h1{font-size:26px}}
 </style>
 
@@ -224,6 +225,11 @@ select.role{font:600 12.5px "Manrope",system-ui,sans-serif;padding:3px 8px;borde
         <p>Black 15x + Hot Wheels 3x + Barbacoa 2x = 20 moldes. Os 37.000 un ficam abaixo dos 37.500 de capacidade: é sobra, sem divergência.</p>
         <h3><span class="tag c">Esclarecido</span> O.S. 27893 · montagem 01</h3>
         <p>Pizza 30 cm 6x + Bandeja P Black Profood 5x + Bandeja P Viajandão 1x = 12 moldes.</p>
+      </section>
+      <section>
+        <h2>Materiais novos</h2>
+        <p>Itens marcados como "material novo" no Montar material, com a FB, os Nx, o papel e a caixa usados. Eles passam a valer como histórico nas próximas montagens.</p>
+        <div id="novoslist"></div>
       </section>
       <section>
         <h2>Outros aproveitamentos encontrados</h2>
@@ -335,6 +341,27 @@ const byCode={},byModel={};
 OS.forEach(o=>{const pa=o.papel[0]||{};o.monts.forEach(m=>m.itens.forEach(i=>{
   const r={os:o.os,ab:o.ab,fb:o.fb[0]||'',faca:o.faca[0]||'',papel:pa.nome?`${pa.nome} ${pa.gram??''}g`.trim():'',moldes:o.moldes,nx:i.nx,lado:m.lado,emb:i.emb||o.emb.join(' // '),ap:i.ap,nome:i.nome,cod:i.cod,folhas:m.folhas,q:i.q};
   (byCode[i.cod]=byCode[i.cod]||[]).push(r);const md=i.cod.split('.')[0];(byModel[md]=byModel[md]||[]).push(r);}))});
+// ===== materiais novos (memória) =====
+const NOVOS={};let NDB=null;
+function novoKey(cod){return cod.replace(/[^A-Za-z0-9_.\-]/g,'_');}
+function lsNovos(){try{return JSON.parse(localStorage.getItem('bm-novos')||'{}')}catch(e){return {}}}
+function lsSave(){try{localStorage.setItem('bm-novos',JSON.stringify(NOVOS))}catch(e){}}
+function applyNovo(d){if(!d||!d.cod)return;NOVOS[d.cod]=d;if(!NAMES[d.cod])NAMES[d.cod]=[d.nome,'novo'];
+  const r={os:0,ab:d.data,fb:d.fb||'',faca:'',papel:d.papel||'',moldes:d.moldes||null,nx:d.nx||1,lado:d.lado||'',emb:d.caixa||'',ap:!!d.aprov,nome:d.nome,cod:d.cod,folhas:d.folhas||null,q:d.unid||null,novo:true};
+  byCode[d.cod]=(byCode[d.cod]||[]).filter(x=>!x.novo);byCode[d.cod].unshift(r);}
+Object.values(lsNovos()).forEach(applyNovo);
+(async()=>{try{if(!window.claude||!window.claude.use)return;NDB=await window.claude.use('db');if(!NDB)return;
+  NDB.collection('materiais_novos').onSnapshot(snap=>{snap.docs.forEach(d=>{if(d.exists)applyNovo(d.data())});
+    snap.docChanges().forEach(c=>{if(c.type==='removed'){const cod=c.doc.data()&&c.doc.data().cod;if(cod){delete NOVOS[cod];if(byCode[cod])byCode[cod]=byCode[cod].filter(x=>!x.novo);}}});
+    lsSave();renderNovos();if(ITEMS.length)render([]);},()=>{});}catch(e){}})();
+function novoDoc(i){const g=i._g||{};return {cod:i.cod,nome:i.nome,fb:g.fb||i.fbSel||'',moldes:g.M||null,nx:i.nx||null,aprov:!!i.aprov,papel:g.papel||'',impressao:g.cores||'',lado:g.lado||'',caixa:g.caixa||'',folhas:g.folhas||null,unid:i.unidOut??i.unid??null,pedido:i.ped||'',obs:i.note||'',montagem:(g.grupo||[]).map(x=>x.cod+' '+x.nx+'x'+(x.aprov?' (aprov.)':'')).join(' + '),data:new Date().toISOString().slice(0,10)};}
+async function saveNovo(i){const d=novoDoc(i);applyNovo(d);lsSave();renderNovos();
+  if(NDB){try{await NDB.collection('materiais_novos').doc(novoKey(i.cod)).set(d);return true}catch(e){return e.code||'erro'}}return 'local';}
+async function delNovo(cod){delete NOVOS[cod];if(byCode[cod])byCode[cod]=byCode[cod].filter(x=>!x.novo);lsSave();renderNovos();
+  if(NDB){try{await NDB.collection('materiais_novos').doc(novoKey(cod)).delete()}catch(e){}}}
+function alertNovo(m){const el=document.getElementById('mmout');if(el)el.insertAdjacentHTML('afterbegin',`<p class="warnln">${esc(m)}</p>`);}
+function renderNovos(){const el=document.getElementById('novoslist');if(!el)return;const L=Object.values(NOVOS).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  el.innerHTML=L.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Código</th><th>Produto</th><th>FB</th><th class="r">Nx</th><th>Papel</th><th>Lado</th><th>Caixa</th><th>Montagem</th></tr></thead><tbody>${L.map(d=>`<tr><td class="num">${esc((d.data||'').split('-').reverse().join('/'))}</td><td class="mono">${esc(d.cod)}</td><td>${esc(d.nome)}${d.aprov?' <span class="chip ap">aprov.</span>':''}</td><td>${esc(d.fb)}</td><td class="r">${d.nx?d.nx+'x':'—'}</td><td>${esc(d.papel)}</td><td>${esc(d.lado)}</td><td>${esc(d.caixa)}</td><td class="src">${esc(d.montagem)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="src">Nenhum material novo marcado ainda.</p>';}
 function cxOf(cod){const f=CX.full[cod];if(f)return {cx:f[0],q:f[1],src:'Modelos oficial (código)'};const m=CX.model[cod.split('.')[0]];if(m)return {cx:m[0],q:m[1],src:'Modelos oficial (modelo '+cod.split('.')[0]+')'};return null;}
 const FBI={};FB.forEach(f=>FBI[f.fb]=f);
 const lastOSofFB=fb=>OS.find(o=>o.fb.includes(fb));
@@ -417,10 +444,11 @@ function render(errs){
   const groups={};ITEMS.forEach(it=>{(groups[it.fbSel||'?']=groups[it.fbSel||'?']||[]).push(it)});
   let html=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';
   html+=`<div class="qpanel"><h3>Quantidades <span class="src">em unidades</span></h3>
-   <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Quantidade (unid)</th><th>Tipo · origem</th></tr></thead><tbody>
+   <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Quantidade (unid)</th><th>Tipo · origem</th><th>Novo</th></tr></thead><tbody>
    ${ITEMS.map((i,idx)=>`<tr><td><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</td>
      <td class="r"><input class="qin" type="number" min="0" step="1" id="qu${idx}" data-q="${idx}" value="${i.unid??''}" placeholder="unid" aria-label="Unidades de ${esc(i.cod)}"></td>
-     <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?'informada':(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td></tr>`).join('')}
+     <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?'informada':(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td>
+     <td><label class="chk novo"><input type="checkbox" id="nv${idx}" data-novo="${idx}"${NOVOS[i.cod]?' checked':''}> ${NOVOS[i.cod]?'salvo':'material novo'}</label></td></tr>`).join('')}
    </tbody></table></div></div>`;
   Object.entries(groups).forEach(([fb,its],gi)=>{
     const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
@@ -444,6 +472,7 @@ function render(errs){
       const extra=[i.ped?`Ped. ${i.ped}`:'',i.note].filter(Boolean).join(' – ');if(extra)l.push(extra);l.push('');return l;};
     const nome=[`Imprimir ${folhas?fmt(folhas):'[folhas]'} Folhas`,'',...(hasAp?[...mains.flatMap(line),'**** APROVEITAMENTOS','',...aps.flatMap(line)]:its.flatMap(line))].join('\n').trim();
     const somaNx=its.reduce((s,i)=>s+(i.nx||0),0);
+    its.forEach(i=>i._g={fb,M,papel,cores:cores.join(' / '),lado:lados.join(' / '),caixa,folhas,grupo:its.map(x=>({cod:x.cod,nx:x.nx,aprov:!!x.aprov}))});
     const checks=[];
     if(fb==='?')checks.push(['w','Nenhuma FB encontrada no histórico para esses códigos. Informe com FB-0000 no início da linha.']);
     if(M&&somaNx!==M)checks.push(['w',`Soma dos Nx = ${somaNx}, mas a FB ${fb} tem ${M} moldes.`]);
@@ -490,6 +519,7 @@ mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(d.q!=null){const it=ITEMS[d.q];const v=parseFloat(e.target.value);const id=e.target.id;
     it.unid=isNaN(v)?null:Math.round(v);it.qSrc=it.unid==null?'':'informada';
     ITEMS.forEach(x=>{if(x.fbSel===it.fbSel)x.nxMan=null;});render([]);const el=document.getElementById(id);if(el){el.focus();}return;}
+  if(d.novo!=null){const it=ITEMS[d.novo];if(e.target.checked){saveNovo(it).then(r=>{if(r!==true&&r!=='local'){e.target.checked=false;alertNovo('Não foi possível salvar ('+r+').');}else render([]);});}else{delNovo(it.cod).then(()=>render([]));}return;}
   if(d.role!=null){ITEMS[d.role].apMan=e.target.value==='a';ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
   const n=d.nx,f=d.fb,al=d.alt;
   if(al!=null){const it=ITEMS[al];it.cod=e.target.value;it.nome=NAMES[it.cod][0];const m2=it.nome.match(/\b(?:CX|PC|FD|PCT)\s*C\/\s*([\d.]+)/i);it.mult=m2?parseInt(m2[1].replace(/\./g,'')):it.mult;it.R=refs(it);it.cxo=cxOf(it.cod);it.cands=fbCands(it,it.R);it.fbSel=it.fb||it.cands[0]||'';if(it.qSrc!=='informada'){const h=(byCode[it.cod]||[]).find(r=>r.q);it.unid=h?h.q:null;it.qSrc=h?'qtd da última O.S. ('+h.os+')':'';}const hl=topc(it.R.rows,r=>r.lado);if(!it.lado){it.ladoFin=hl[0]?hl[0][0]:'';it.ladoSrc=hl[0]?'histórico':'';}render([]);return;}
@@ -500,7 +530,7 @@ mmout.addEventListener('click',async e=>{
   const eq=e.target.closest('[data-eq]');if(eq){const fb=eq.dataset.eq,fl=Number(eq.dataset.fl);
     ITEMS.forEach(i=>{if(i.fbSel===fb&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
-  const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
+  const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;ITEMS.forEach(i=>{if(NOVOS[i.cod]&&i._g)saveNovo(i);});const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
   const cells=[...tb.querySelectorAll('td')].map(td=>td.innerText.trim());
   const st='font-family:Calibri,Arial;font-size:11pt;font-weight:bold;border:1px solid #7f7f7f;vertical-align:middle;';
   const htmlT=`<table style="border-collapse:collapse"><tr>${['Faca','Nome','Tipo Papel','Impressão','Lado Papel','Caixa De Embarque'].map(h=>`<th style="${st}background:#002060;color:#FFFF00;text-align:center">${h}</th>`).join('')}</tr><tr>${cells.map((c,k)=>`<td style="${st}background:#FFFF00;text-align:${k===1?'left':'center'};white-space:pre-wrap">${esc(c).replace(/\n/g,'<br style="mso-data-placement:same-cell">')}</td>`).join('')}</tr></table>`;
@@ -513,6 +543,7 @@ document.getElementById('mmex').onclick=()=>{document.getElementById('mmtxt').va
 document.getElementById('mmclr').onclick=()=>{document.getElementById('mmtxt').value='';ITEMS=[];render([]);};
 document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))montar();});
 document.getElementById('mmtxt').value=EX;montar();
+renderNovos();
 </script>
 
 </body>
