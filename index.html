@@ -147,6 +147,16 @@ input[type=checkbox]{accent-color:#2DD4BF}
 .sub,.src,.count{color:var(--muted)}
 select.role{font:600 12.5px "Manrope",system-ui,sans-serif;padding:3px 8px;border-radius:999px;background:var(--sunk);color:var(--ink);border:1px solid var(--line)}
 label.chk.novo{white-space:nowrap}
+
+.askfb{margin-top:16px;border:1px solid rgba(45,212,191,.45);border-radius:18px;padding:14px 16px;display:grid;gap:10px;background:linear-gradient(180deg,rgba(45,212,191,.08),rgba(45,212,191,.02)),var(--surface);box-shadow:var(--glow)}
+.askfb h3{margin:0;font-weight:700}
+.askfb .src{margin:0}
+.askitem{display:grid;gap:6px;padding-top:8px;border-top:1px solid var(--line)}
+.askopts{display:flex;flex-wrap:wrap;gap:8px}
+.askbtn{display:grid;gap:2px;text-align:left;border-radius:12px;padding:8px 12px;max-width:100%}
+.askbtn span{font-weight:500;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.askbtn em{font-style:normal;font-size:11.5px;color:var(--cyan)}
+.askbtn:hover{border-color:rgba(45,212,191,.6)}
 @media (max-width:560px){.card>summary{grid-template-columns:1fr}.meta{grid-column:1}h1{font-size:26px}}
 </style>
 
@@ -413,6 +423,11 @@ function cadMatch(nome){if(!CADIDX)CADIDX=FBCAD.filter(c=>c[3]).map(c=>({t:c[0],
   const q=new Set(ctok(nome));if(!q.size)return [];
   return CADIDX.map(c=>{let h=0;c.tk.forEach(x=>{if(q.has(x))h++;});let hc=0;c.ck.forEach(x=>{if(q.has(x))hc++;});const sc=c.tk.size?h/c.tk.size+(hc?0.2:0)+h*0.05:0;return {...c,sc};})
     .filter(c=>c.sc>=0.75&&c.tk.size>=2).sort((a,b)=>b.sc-a.sc).slice(0,5);}
+function fbInfo(i,fb){const rows=i.R.rows.filter(r=>r.fb===fb&&!r.novo);const F=FBI[fb];const parts=[];
+  if(rows.length){const last=rows.reduce((m,r)=>Math.max(m,r.os),0);const na=rows.filter(r=>r.ap).length;parts.push(`${rows.length} registro(s) no histórico${na===rows.length?' como aproveitamento':(na?` (${na} como aproveitamento)`:'')}, última O.S. ${last}`);}
+  else if(i.R.rows.some(r=>r.fb===fb&&r.novo))parts.push('material novo salvo');
+  const cad=(CADBYFB[fb]||[]);if(cad.length)parts.push('cadastro '+cad.slice(0,2).map(c=>c.t+' '+c.prod).join('; '));
+  if(F&&F.moldes[0])parts.push(F.moldes[0][0]+' moldes');return parts.join(' · ')||'sem detalhes';}
 function fbCands(it,R){const m=cadMatch(it.nome);it.cadTop=m[0]||null;if(!R.rows.length){it.cadHit=m[0]||null;return [...new Set(m.map(x=>x.fb))];}it.cadExtra=[...new Set(m.map(x=>x.fb))];const best={};R.rows.forEach(r=>{if(!r.fb)return;const sc=(r.ap?0:1e6)+r.os;if(!best[r.fb]||sc>best[r.fb])best[r.fb]=sc});const hist=Object.entries(best).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return [...new Set([...hist,...(it.cadExtra||[])])];}
 const isPizza=i=>/PIZZA/i.test(i.nome);
 const isAprovCand=i=>/LAPELA/i.test(i.nome)||/BANDEJA\s+MULTIUSO\s+'?P'?(\s|$)/i.test(i.nome);
@@ -462,6 +477,15 @@ function render(errs){
      <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?'informada':(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td>
      <td><label class="chk novo"><input type="checkbox" id="nv${idx}" data-novo="${idx}"${NOVOS[i.cod]?' checked':''}> ${NOVOS[i.cod]?'salvo':'material novo'}</label></td></tr>`).join('')}
    </tbody></table></div></div>`;
+  const pend=ITEMS.filter(i=>!i.aprov&&!i.fb&&i.cands.length>1);
+  if(pend.length){
+    html+=`<div class="askfb"><h3>Qual FB usar?</h3><p class="src">Esses materiais aparecem em mais de uma FB. Escolha a FB de cada um para montar.</p>
+    ${pend.map(i=>{const idx=ITEMS.indexOf(i);let last='';try{last=(JSON.parse(localStorage.getItem('bm-fbpick')||'{}'))[i.cod]||''}catch(e){}
+      return `<div class="askitem"><div><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</div><div class="askopts">${i.cands.map(fb=>{const inf=fbInfo(i,fb);
+        return `<button class="btn askbtn" data-pick="${idx}" data-pfb="${esc(fb)}"><b>FB ${esc(fb)}</b><span>${esc(inf)}</span>${fb===last?'<em>última escolha</em>':''}</button>`}).join('')}</div></div>`}).join('')}
+    </div>`;
+    box.innerHTML=html;return;
+  }
   Object.entries(groups).forEach(([fb,its],gi)=>{
     const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
     const lo=fb!=='?'?lastOSofFB(fb):null;
@@ -538,11 +562,15 @@ mmout.addEventListener('change',e=>{const d=e.target.dataset;
   const n=d.nx,f=d.fb,al=d.alt;
   if(al!=null){const it=ITEMS[al];it.cod=e.target.value;it.nome=NAMES[it.cod][0];const m2=it.nome.match(/\b(?:CX|PC|FD|PCT)\s*C\/\s*([\d.]+)/i);it.mult=m2?parseInt(m2[1].replace(/\./g,'')):it.mult;it.R=refs(it);it.cxo=cxOf(it.cod);it.cands=fbCands(it,it.R);it.fbSel=it.fb||it.cands[0]||'';if(it.qSrc!=='informada'){const h=(byCode[it.cod]||[]).find(r=>r.q);it.unid=h?h.q:null;it.qSrc=h?'qtd da última O.S. ('+h.os+')':'';}const hl=topc(it.R.rows,r=>r.lado);if(!it.lado){it.ladoFin=hl[0]?hl[0][0]:'';it.ladoSrc=hl[0]?'histórico':'';}render([]);return;}
   if(n!=null){const v=parseInt(e.target.value);ITEMS[n].nxMan=v>0?v:null;render([]);}
-  if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
+  if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS[f].fb=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
 mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.dataset.cx;if(cx){try{localStorage.setItem('bm-cx2-'+cx,e.target.innerText.trim())}catch(x){}}});
 mmout.addEventListener('click',async e=>{
   const eq=e.target.closest('[data-eq]');if(eq){const fb=eq.dataset.eq,fl=Number(eq.dataset.fl);
     ITEMS.forEach(i=>{if(i.fbSel===fb&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
+  const pk=e.target.closest('[data-pick]');if(pk){const it=ITEMS[pk.dataset.pick],fb=pk.dataset.pfb;it.fb=fb;it.fbSel=fb;
+    try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fb;localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
+    const md=it.cod.split('.')[0];ITEMS.forEach(o=>{if(o!==it&&!o.fb&&!o.aprov&&o.cands.length>1&&o.cod.split('.')[0]===md&&o.cands.includes(fb)){o.fb=fb;o.fbSel=fb;}});
+    ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
   const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;ITEMS.forEach(i=>{if(NOVOS[i.cod]&&i._g)saveNovo(i);});const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
   const cells=[...tb.querySelectorAll('td')].map(td=>td.innerText.trim());
