@@ -265,7 +265,7 @@ const FBCAD=[["T-0000","Bar do Nelson","Selada - M","0327","FB-0327"],["T-0001",
 <script>
 const fmt=n=>n==null?'—':n.toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const OS=DATA.os, FB=DATA.fb;
 const CADBYFB={};FBCAD.forEach(([tc,cli,prod,fb,raw])=>{if(fb)(CADBYFB[fb]=CADBYFB[fb]||[]).push({t:tc,cli,prod});});
 FB.forEach(f=>f.cad=CADBYFB[f.fb]||[]);
