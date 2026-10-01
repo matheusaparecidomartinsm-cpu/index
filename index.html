@@ -157,6 +157,9 @@ label.chk.novo{white-space:nowrap}
 .askbtn span{font-weight:500;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .askbtn em{font-style:normal;font-size:11.5px;color:var(--cyan)}
 .askbtn:hover{border-color:rgba(45,212,191,.6)}
+
+.askmulti{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px}
+.askbtn.duo{border-color:rgba(163,230,53,.45)}
 @media (max-width:560px){.card>summary{grid-template-columns:1fr}.meta{grid-column:1}h1{font-size:26px}}
 </style>
 
@@ -355,7 +358,7 @@ run();runfb();
 // ===== Montar material =====
 const byCode={},byModel={};
 OS.forEach(o=>{const pa=o.papel[0]||{};o.monts.forEach(m=>m.itens.forEach(i=>{
-  const r={os:o.os,ab:o.ab,fb:o.fb[0]||'',faca:o.faca[0]||'',papel:pa.nome?`${pa.nome} ${pa.gram??''}g`.trim():'',moldes:o.moldes,nx:i.nx,lado:m.lado,emb:i.emb||o.emb.join(' // '),ap:i.ap,nome:i.nome,cod:i.cod,folhas:m.folhas,q:i.q};
+  const r={os:o.os,ab:o.ab,fbs:o.fb,fb:o.fb[0]||'',faca:o.faca[0]||'',papel:pa.nome?`${pa.nome} ${pa.gram??''}g`.trim():'',moldes:o.moldes,nx:i.nx,lado:m.lado,emb:i.emb||o.emb.join(' // '),ap:i.ap,nome:i.nome,cod:i.cod,folhas:m.folhas,q:i.q};
   (byCode[i.cod]=byCode[i.cod]||[]).push(r);const md=i.cod.split('.')[0];(byModel[md]=byModel[md]||[]).push(r);}))});
 // ===== materiais novos (memória) =====
 const NOVOS={};let NDB=null;
@@ -372,7 +375,7 @@ Object.values(lsNovos()).forEach(applyNovo);
     lsSave();renderNovos();if(ITEMS.length)render([]);},()=>{});}catch(e){}})();
 function novoDoc(i){const g=i._g||{};return {cod:i.cod,nome:i.nome,fb:g.fb||i.fbSel||'',moldes:g.M||null,nx:i.nx||null,aprov:!!i.aprov,papel:g.papel||'',impressao:g.cores||'',lado:g.lado||'',caixa:g.caixa||'',folhas:g.folhas||null,unid:i.unidOut??i.unid??null,pedido:i.ped||'',obs:i.note||'',montagem:(g.grupo||[]).map(x=>x.cod+' '+x.nx+'x'+(x.aprov?' (aprov.)':'')).join(' + '),data:new Date().toISOString().slice(0,10)};}
 async function saveNovo(i){const d=novoDoc(i);applyNovo(d);lsSave();renderNovos();
-  if(NDB){try{await NDB.collection('materiais_novos').doc(novoKey(i.cod)).set(d);return true}catch(e){return e.code||'erro'}}return 'local';}
+  if(NDB){try{await NDB.collection('materiais_novos').doc(novoKey(i.cod+(i.split?'_'+i.fb:''))).set(d);return true}catch(e){return e.code||'erro'}}return 'local';}
 async function delNovo(cod){delete NOVOS[cod];if(byCode[cod])byCode[cod]=byCode[cod].filter(x=>!x.novo);lsSave();renderNovos();
   if(NDB){try{await NDB.collection('materiais_novos').doc(novoKey(cod)).delete()}catch(e){}}}
 function alertNovo(m){const el=document.getElementById('mmout');if(el)el.insertAdjacentHTML('afterbegin',`<p class="warnln">${esc(m)}</p>`);}
@@ -423,12 +426,20 @@ function cadMatch(nome){if(!CADIDX)CADIDX=FBCAD.filter(c=>c[3]).map(c=>({t:c[0],
   const q=new Set(ctok(nome));if(!q.size)return [];
   return CADIDX.map(c=>{let h=0;c.tk.forEach(x=>{if(q.has(x))h++;});let hc=0;c.ck.forEach(x=>{if(q.has(x))hc++;});const sc=c.tk.size?h/c.tk.size+(hc?0.2:0)+h*0.05:0;return {...c,sc};})
     .filter(c=>c.sc>=0.75&&c.tk.size>=2).sort((a,b)=>b.sc-a.sc).slice(0,5);}
-function fbInfo(i,fb){const rows=i.R.rows.filter(r=>r.fb===fb&&!r.novo);const F=FBI[fb];const parts=[];
+function combos(i){const m={};i.R.rows.forEach(r=>{if(r.fbs&&r.fbs.length>1&&!r.ap){const k=r.fbs.join('+');(m[k]=m[k]||{fbs:r.fbs,os:[]}).os.push(r.os);}});
+  return Object.values(m).map(c=>({...c,os:[...new Set(c.os)]})).sort((a,b)=>b.os.length-a.os.length);}
+function splitItem(it,fbs){const Ms=fbs.map(fb=>{const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):1;});const tot=Ms.reduce((a,b)=>a+b,0);
+  const at=ITEMS.indexOf(it);const Q=it.unid;let rest=Q;
+  const copies=fbs.map((fb,k)=>{const c={...it,fb,fbSel:fb,split:fbs.join('+'),nxMan:null};
+    if(Q!=null){c.unid=k===fbs.length-1?rest:Math.round(Q*Ms[k]/tot);rest-=c.unid;c.qSrc='informada';c.qNote=`dividida entre FB ${fbs.join(' + ')}`;}
+    if(!c.cands.includes(fb))c.cands=[fb,...c.cands];return c;});
+  ITEMS.splice(at,1,...copies);}
+function fbInfo(i,fb){const rows=i.R.rows.filter(r=>(r.fbs||[r.fb]).includes(fb)&&!r.novo);const F=FBI[fb];const parts=[];
   if(rows.length){const last=rows.reduce((m,r)=>Math.max(m,r.os),0);const na=rows.filter(r=>r.ap).length;parts.push(`${rows.length} registro(s) no histórico${na===rows.length?' como aproveitamento':(na?` (${na} como aproveitamento)`:'')}, última O.S. ${last}`);}
   else if(i.R.rows.some(r=>r.fb===fb&&r.novo))parts.push('material novo salvo');
   const cad=(CADBYFB[fb]||[]);if(cad.length)parts.push('cadastro '+cad.slice(0,2).map(c=>c.t+' '+c.prod).join('; '));
   if(F&&F.moldes[0])parts.push(F.moldes[0][0]+' moldes');return parts.join(' · ')||'sem detalhes';}
-function fbCands(it,R){const m=cadMatch(it.nome);it.cadTop=m[0]||null;if(!R.rows.length){it.cadHit=m[0]||null;return [...new Set(m.map(x=>x.fb))];}it.cadExtra=[...new Set(m.map(x=>x.fb))];const best={};R.rows.forEach(r=>{if(!r.fb)return;const sc=(r.ap?0:1e6)+r.os;if(!best[r.fb]||sc>best[r.fb])best[r.fb]=sc});const hist=Object.entries(best).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return [...new Set([...hist,...(it.cadExtra||[])])];}
+function fbCands(it,R){const m=cadMatch(it.nome);it.cadTop=m[0]||null;if(!R.rows.length){it.cadHit=m[0]||null;return [...new Set(m.map(x=>x.fb))];}it.cadExtra=[...new Set(m.map(x=>x.fb))];const best={};R.rows.forEach(r=>{(r.fbs&&r.fbs.length?r.fbs:[r.fb]).forEach(f=>{if(!f)return;const sc=(r.ap?0:1e6)+r.os-(f===r.fb?0:0.5);if(!best[f]||sc>best[f])best[f]=sc;});});const hist=Object.entries(best).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return [...new Set([...hist,...(it.cadExtra||[])])];}
 const isPizza=i=>/PIZZA/i.test(i.nome);
 const isAprovCand=i=>/LAPELA/i.test(i.nome)||/BANDEJA\s+MULTIUSO\s+'?P'?(\s|$)/i.test(i.nome);
 function pickCommon(list){const free=(list||ITEMS).filter(i=>!i.fb);if(free.length<2)return;
@@ -472,17 +483,19 @@ function render(errs){
   let html=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';
   html+=`<div class="qpanel"><h3>Quantidades <span class="src">em unidades</span></h3>
    <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Quantidade (unid)</th><th>Tipo · origem</th><th>Novo</th></tr></thead><tbody>
-   ${ITEMS.map((i,idx)=>`<tr><td><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</td>
+   ${ITEMS.map((i,idx)=>`<tr><td><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}${i.split?` <span class="chip fb">FB ${esc(i.fb)}</span>`:''}</td>
      <td class="r"><input class="qin" type="number" min="0" step="1" id="qu${idx}" data-q="${idx}" value="${i.unid??''}" placeholder="unid" aria-label="Unidades de ${esc(i.cod)}"></td>
-     <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?'informada':(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td>
+     <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?(i.qNote?esc(i.qNote):'informada'):(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td>
      <td><label class="chk novo"><input type="checkbox" id="nv${idx}" data-novo="${idx}"${NOVOS[i.cod]?' checked':''}> ${NOVOS[i.cod]?'salvo':'material novo'}</label></td></tr>`).join('')}
    </tbody></table></div></div>`;
   const pend=ITEMS.filter(i=>!i.aprov&&!i.fb&&i.cands.length>1);
   if(pend.length){
-    html+=`<div class="askfb"><h3>Qual FB usar?</h3><p class="src">Esses materiais aparecem em mais de uma FB. Escolha a FB de cada um para montar.</p>
+    html+=`<div class="askfb"><h3>Qual FB usar?</h3><p class="src">Esses materiais aparecem em mais de uma FB. Escolha a FB de cada um, ou divida o material entre duas FBs.</p>
     ${pend.map(i=>{const idx=ITEMS.indexOf(i);let last='';try{last=(JSON.parse(localStorage.getItem('bm-fbpick')||'{}'))[i.cod]||''}catch(e){}
       return `<div class="askitem"><div><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</div><div class="askopts">${i.cands.map(fb=>{const inf=fbInfo(i,fb);
-        return `<button class="btn askbtn" data-pick="${idx}" data-pfb="${esc(fb)}"><b>FB ${esc(fb)}</b><span>${esc(inf)}</span>${fb===last?'<em>última escolha</em>':''}</button>`}).join('')}</div></div>`}).join('')}
+        return `<button class="btn askbtn" data-pick="${idx}" data-pfb="${esc(fb)}"><b>FB ${esc(fb)}</b><span>${esc(inf)}</span>${fb===last?'<em>última escolha</em>':''}</button>`}).join('')}
+        ${combos(i).map(c=>`<button class="btn askbtn duo" data-pick="${idx}" data-pfb="${esc(c.fbs.join('+'))}"><b>FB ${esc(c.fbs.join(' + '))}</b><span>usadas juntas na mesma O.S. (${c.os.length}x) (última ${Math.max(...c.os)})</span>${c.fbs.join('+')===last?'<em>última escolha</em>':''}</button>`).join('')}</div>
+        <div class="askmulti"><span class="src">Usar mais de uma FB:</span>${i.cands.map(fb=>`<label class="chk"><input type="checkbox" data-mfb="${idx}" value="${esc(fb)}"> ${esc(fb)}</label>`).join('')}<button class="btn" data-msplit="${idx}">Dividir entre as marcadas</button></div></div>`}).join('')}
     </div>`;
     box.innerHTML=html;return;
   }
@@ -510,6 +523,7 @@ function render(errs){
     const somaNx=its.reduce((s,i)=>s+(i.nx||0),0);
     its.forEach(i=>i._g={fb,M,papel,cores:cores.join(' / '),lado:lados.join(' / '),caixa,folhas,grupo:its.map(x=>({cod:x.cod,nx:x.nx,aprov:!!x.aprov}))});
     const checks=[];
+    its.forEach(i=>{if(i.split)checks.push(['w',`${i.cod}: material dividido entre FB ${i.split.replace(/\+/g,' + ')}. Esta montagem tem ${fmt(i.unid||0)} un; confira as quantidades de cada FB no quadro Quantidades.`]);});
     its.forEach(i=>{if(!i.cadHit&&i.cadTop&&i.cadTop.fb!==i.fbSel&&!i.aprov)checks.push(['w',`${i.cod}: o cadastro de facas indica FB ${i.cadTop.fb} (${i.cadTop.t} ${i.cadTop.cli} – ${i.cadTop.prod}), mas o histórico de O.S. usou FB ${i.fbSel}. Dá para trocar na lista de FB.`]);});
     its.forEach(i=>{if(i.cadHit&&i.fbSel===i.cadHit.fb)checks.push(['w',`${i.cod}: sem O.S. no histórico; FB ${i.cadHit.fb} sugerida pelo cadastro de facas (${i.cadHit.t} ${i.cadHit.cli} – ${i.cadHit.prod}). Confira.`]);});
     if(fb==='?')checks.push(['w','Nenhuma FB encontrada no histórico para esses códigos. Informe com FB-0000 no início da linha.']);
@@ -555,7 +569,7 @@ const mmout=document.getElementById('mmout');
 mmout.addEventListener('toggle',e=>{const c=e.target.dataset&&e.target.dataset.conf;if(c!=null){e.target.open?OPENCONF.add(c):OPENCONF.delete(c);}},true);
 mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(d.q!=null){const it=ITEMS[d.q];const v=parseFloat(e.target.value);const id=e.target.id;
-    it.unid=isNaN(v)?null:Math.round(v);it.qSrc=it.unid==null?'':'informada';
+    it.unid=isNaN(v)?null:Math.round(v);it.qSrc=it.unid==null?'':'informada';it.qNote='';
     ITEMS.forEach(x=>{if(x.fbSel===it.fbSel)x.nxMan=null;});render([]);const el=document.getElementById(id);if(el){el.focus();}return;}
   if(d.novo!=null){const it=ITEMS[d.novo];if(e.target.checked){saveNovo(it).then(r=>{if(r!==true&&r!=='local'){e.target.checked=false;alertNovo('Não foi possível salvar ('+r+').');}else render([]);});}else{delNovo(it.cod).then(()=>render([]));}return;}
   if(d.role!=null){ITEMS[d.role].apMan=e.target.value==='a';ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
@@ -567,7 +581,14 @@ mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.datase
 mmout.addEventListener('click',async e=>{
   const eq=e.target.closest('[data-eq]');if(eq){const fb=eq.dataset.eq,fl=Number(eq.dataset.fl);
     ITEMS.forEach(i=>{if(i.fbSel===fb&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
-  const pk=e.target.closest('[data-pick]');if(pk){const it=ITEMS[pk.dataset.pick],fb=pk.dataset.pfb;it.fb=fb;it.fbSel=fb;
+  const ms=e.target.closest('[data-msplit]');if(ms){const idx=ms.dataset.msplit;const sel=[...mmout.querySelectorAll(`input[data-mfb="${idx}"]:checked`)].map(x=>x.value);
+    if(sel.length<2){ms.insertAdjacentHTML('afterend','<span class="warnln"> Marque pelo menos 2 FBs.</span>');return;}
+    const it=ITEMS[idx];try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=sel.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
+    splitItem(it,sel);ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  const pk=e.target.closest('[data-pick]');if(pk&&pk.dataset.pfb.includes('+')){const it=ITEMS[pk.dataset.pick];const fbs=pk.dataset.pfb.split('+');
+    try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fbs.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
+    splitItem(it,fbs);ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  if(pk){const it=ITEMS[pk.dataset.pick],fb=pk.dataset.pfb;it.fb=fb;it.fbSel=fb;
     try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fb;localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     const md=it.cod.split('.')[0];ITEMS.forEach(o=>{if(o!==it&&!o.fb&&!o.aprov&&o.cands.length>1&&o.cod.split('.')[0]===md&&o.cands.includes(fb)){o.fb=fb;o.fbSel=fb;}});
     ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
