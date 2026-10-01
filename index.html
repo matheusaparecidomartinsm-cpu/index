@@ -160,6 +160,7 @@ label.chk.novo{white-space:nowrap}
 
 .askmulti{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px}
 .askbtn.duo{border-color:rgba(163,230,53,.45)}
+.eqlog{margin:14px 0 0;font-size:13.5px}
 @media (max-width:560px){.card>summary{grid-template-columns:1fr}.meta{grid-column:1}h1{font-size:26px}}
 </style>
 
@@ -469,6 +470,30 @@ function applyRoles(){
   const ref=pz[0]||mains[0];const pfb=ref&&ref.fbSel;
   ITEMS.forEach(i=>{if(i.aprov&&!i.fb&&pfb){i.fbSel=pfb;if(!i.cands.includes(pfb))i.cands.unshift(pfb);}});
 }
+let EQLOG='';
+function equalize(items){
+  // para cada nº de folhas F, escolhe os Nx (somando os moldes) que menos mudam as quantidades, preferindo caixas fechadas
+  const n=items.length,M=items.reduce((a,i)=>a+i.nx,0),q0=items.map(i=>i.unid),P=items.map(i=>i.mult||1);
+  const fixed=items.map(i=>null);
+  const tot=q0.reduce((a,b)=>a+b,0);const Fc=tot/M;const F0=Math.max(1,Math.floor(Fc*0.7)),F1=Math.ceil(Fc*1.4)+2;
+  const step=Math.max(1,Math.floor((F1-F0)/1500));
+  function itemCost(k,x,F){const lo=(F-1)*x,hi=F*x,p=P[k];const klo=Math.floor(lo/p)+1,khi=Math.floor(hi/p);let v,pen=0;
+    if(klo<=khi){let kk=Math.round(q0[k]/p);kk=Math.min(khi,Math.max(klo,kk));v=kk*p;}else{v=hi;pen=Math.max(1,q0[k]);}
+    return [(v<q0[k]?1.5:1)*Math.abs(v-q0[k])+pen,v];}
+  let best=null;
+  for(let F=F0;F<=F1;F+=step){
+    // DP: dp[j]=menor custo usando j moldes nos itens processados
+    let dp=new Array(M+1).fill(Infinity);dp[0]=0;const ch=[];
+    for(let k=0;k<n;k++){const nd=new Array(M+1).fill(Infinity),pick=new Array(M+1).fill(-1);const cs=[];
+      for(let x=1;x<=M;x++)cs[x]=itemCost(k,x,F)[0];
+      for(let j=0;j<=M;j++){if(dp[j]===Infinity)continue;for(let x=1;j+x<=M;x++){const c=dp[j]+cs[x];if(c<nd[j+x]){nd[j+x]=c;pick[j+x]=x;}}}
+      ch.push(pick);dp=nd;}
+    if(dp[M]<Infinity&&(!best||dp[M]<best.cost-1e-9)){const nx=new Array(n);let j=M;for(let k=n-1;k>=0;k--){nx[k]=ch[k][j];j-=nx[k];}best={cost:dp[M],F,nx};}
+  }
+  if(!best)return {nx:items.map(i=>i.nx),q:q0.slice(),F:Math.max(...items.map(i=>Math.ceil(i.unid/i.nx))),q0};
+  const q=best.nx.map((x,k)=>itemCost(k,x,best.F)[1]);
+  return {nx:best.nx,q,F:best.F,q0};
+}
 function distribute(items,M){
   // minimax: distribui os moldes para que todos os materiais fechem no mesmo número de folhas (ou o mais próximo possível)
   if(!M||items.some(i=>!i.unid&&!i.nxMan))return items.map(i=>i.nxMan);
@@ -482,6 +507,7 @@ function render(errs){
   if(!ITEMS.length){box.innerHTML=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';return;}
   const groups={};ITEMS.forEach(it=>{(groups[it.fbSel||'?']=groups[it.fbSel||'?']||[]).push(it)});
   let html=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';
+  if(EQLOG){html+=`<p class="okln eqlog">${esc(EQLOG)}</p>`;EQLOG='';}
   html+=`<div class="qpanel"><h3>Quantidades <span class="src">em caixas / pacotes</span></h3>
    <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Cx / pct</th><th class="r">Unidades</th><th>Tipo · origem</th><th>Novo</th></tr></thead><tbody>
    ${ITEMS.map((i,idx)=>`<tr><td><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}${i.split?` <span class="chip fb">FB ${esc(i.fb)}</span>`:''}</td>
@@ -586,8 +612,12 @@ mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS[f].fb=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
 mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.dataset.cx;if(cx){try{localStorage.setItem('bm-cx2-'+cx,e.target.innerText.trim())}catch(x){}}});
 mmout.addEventListener('click',async e=>{
-  const eq=e.target.closest('[data-eq]');if(eq){const fl=Number(eq.dataset.fl);const sel=new Set(eq.dataset.eqi.split(',').map(Number));
-    ITEMS.forEach((i,ix)=>{if(sel.has(ix)&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
+  const eq=e.target.closest('[data-eq]');if(eq){const sel=new Set(eq.dataset.eqi.split(',').map(Number));
+    const its=ITEMS.filter((i,ix)=>sel.has(ix)&&!i.aprov&&i.nx&&i.unid);if(!its.length)return;
+    const r=equalize(its);const log=[];
+    its.forEach((i,k)=>{const before=i.unid;i.nxMan=r.nx[k];i.unid=r.q[k];i.qSrc='informada';i.qNote=before!==r.q[k]?`ajustado de ${fmt(before)} para ${fmt(r.q[k])} un para igualar folhas`:'';});
+    EQLOG=`Igualar folhas: todos fecham em ${fmt(r.F)} folhas. `+its.map((i,k)=>{const p=i.mult||1;return `${i.cod}: ${r.q0[k]===r.q[k]?'mantido':fmt(r.q0[k]/p)+' → '+fmt(r.q[k]/p)+' '+(i.mult?'cx/pct':'un')+(r.q[k]<r.q0[k]?' (reduzido)':' (aumentado)')}${r.q[k]%p?' (não fecha caixa)':''}`}).join(' · ');
+    render([]);return;}
   const ms=e.target.closest('[data-msplit]');if(ms){const idx=ms.dataset.msplit;const sel=[...mmout.querySelectorAll(`input[data-mfb="${idx}"]:checked`)].map(x=>x.value);
     if(sel.length<2){ms.insertAdjacentHTML('afterend','<span class="warnln"> Marque pelo menos 2 FBs.</span>');return;}
     const it=ITEMS[idx];try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=sel.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
