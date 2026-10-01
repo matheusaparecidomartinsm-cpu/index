@@ -191,11 +191,11 @@ label.chk.novo{white-space:nowrap}
   <section id="tab-mm">
     <div class="mm-in">
       <label for="mmtxt" class="mm-lbl">Produtos</label>
-      <p class="sub mm-help">Um produto por linha. Opcional depois do nome: quantidade, cores (4 0), lado, pedido e <span class="mono">-- observação</span>.</p>
+      <p class="sub mm-help">Um produto por linha. Opcional depois do nome: quantidade em caixas/pacotes, cores (4 0), lado, pedido e <span class="mono">-- observação</span>.</p>
       <textarea id="mmtxt" rows="4" spellcheck="false"></textarea>
       <div class="controls">
         <button class="btn pri" id="mmgo">Montar</button>
-        <label class="chk"><input type="checkbox" id="mmun" checked> Quantidade digitada na linha é em unidades</label>
+        <label class="chk"><input type="checkbox" id="mmun"> Quantidade digitada na linha já está em unidades</label>
         <button class="btn" id="mmex">Carregar exemplo</button>
         <button class="btn" id="mmclr">Limpar</button>
       </div>
@@ -453,6 +453,7 @@ function montar(){
   const lines=document.getElementById('mmtxt').value.split('\n');const errs=[];ITEMS=[];
   lines.forEach(l=>{const p=parseLine(l);if(!p)return;if(p.err){errs.push(p.err);return;}
     p.R=refs(p);p.cands=fbCands(p,p.R);p.fbSel=p.fb||p.cands[0]||'';
+    if(!p.mult){const cx=cxOf(p.cod);if(cx&&typeof cx.q==='number'&&cx.q>0){p.mult=cx.q;p.multSrc='Modelos';}}else p.multSrc='nome';
     p.unid=p.qtd==null?null:(un||!p.mult?p.qtd:p.qtd*p.mult);p.qSrc=p.qtd==null?'':'informada';
     if(p.unid==null){const h=(byCode[p.cod]||[]).find(r=>r.q);if(h){p.unid=h.q;p.qSrc='qtd da última O.S. ('+h.os+')';}}
     const hl=topc(p.R.rows,r=>r.lado);p.ladoFin=p.lado||(hl[0]?hl[0][0]:'');p.ladoSrc=p.lado?'informado':(hl[0]?'histórico':'');
@@ -481,10 +482,11 @@ function render(errs){
   if(!ITEMS.length){box.innerHTML=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';return;}
   const groups={};ITEMS.forEach(it=>{(groups[it.fbSel||'?']=groups[it.fbSel||'?']||[]).push(it)});
   let html=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';
-  html+=`<div class="qpanel"><h3>Quantidades <span class="src">em unidades</span></h3>
-   <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Quantidade (unid)</th><th>Tipo · origem</th><th>Novo</th></tr></thead><tbody>
+  html+=`<div class="qpanel"><h3>Quantidades <span class="src">em caixas / pacotes</span></h3>
+   <div class="tbl"><table><thead><tr><th>Produto</th><th class="r">Cx / pct</th><th class="r">Unidades</th><th>Tipo · origem</th><th>Novo</th></tr></thead><tbody>
    ${ITEMS.map((i,idx)=>`<tr><td><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}${i.split?` <span class="chip fb">FB ${esc(i.fb)}</span>`:''}</td>
-     <td class="r"><input class="qin" type="number" min="0" step="1" id="qu${idx}" data-q="${idx}" value="${i.unid??''}" placeholder="unid" aria-label="Unidades de ${esc(i.cod)}"></td>
+     <td class="r"><input class="qin" type="number" min="0" step="any" id="qu${idx}" data-q="${idx}" value="${i.unid==null?'':+(i.unid/(i.mult||1)).toFixed(2)}" placeholder="cx/pct" aria-label="Caixas ou pacotes de ${esc(i.cod)}"></td>
+     <td class="r num">${i.unid!=null?fmt(i.unid):'—'}<div class="src">${i.mult?'× '+fmt(i.mult)+(i.multSrc==='Modelos'?' (Modelos)':''):'sem C/N no nome'}</div></td>
      <td class="src"><select class="role" data-role="${idx}" aria-label="Papel de ${esc(i.cod)} na montagem"><option value="p"${i.aprov?'':' selected'}>Principal</option><option value="a"${i.aprov?' selected':''}>Aproveitamento</option></select> ${i.aprov?'sai folhas × Nx':(i.qSrc==='informada'?(i.qNote?esc(i.qNote):'informada'):(i.qSrc?esc(i.qSrc)+' · confira':'falta a quantidade'))}</td>
      <td><label class="chk novo"><input type="checkbox" id="nv${idx}" data-novo="${idx}"${NOVOS[i.cod]?' checked':''}> ${NOVOS[i.cod]?'salvo':'material novo'}</label></td></tr>`).join('')}
    </tbody></table></div></div>`;
@@ -523,6 +525,7 @@ function render(errs){
     const somaNx=its.reduce((s,i)=>s+(i.nx||0),0);
     its.forEach(i=>i._g={fb,M,papel,cores:cores.join(' / '),lado:lados.join(' / '),caixa,folhas,grupo:its.map(x=>({cod:x.cod,nx:x.nx,aprov:!!x.aprov}))});
     const checks=[];
+    its.forEach(i=>{if(!i.mult)checks.push(['w',`${i.cod}: o nome não tem C/N e a planilha de Modelos não tem quantidade por caixa; a quantidade foi usada como unidades.`]);else if(i.multSrc==='Modelos')checks.push(['w',`${i.cod}: o nome não tem C/N; usei ${fmt(i.mult)} un por caixa da planilha de Modelos.`]);});
     its.forEach(i=>{if(i.split)checks.push(['w',`${i.cod}: material dividido entre FB ${i.split.replace(/\+/g,' + ')}. Esta montagem tem ${fmt(i.unid||0)} un; confira as quantidades de cada FB no quadro Quantidades.`]);});
     its.forEach(i=>{if(!i.cadHit&&i.cadTop&&i.cadTop.fb!==i.fbSel&&!i.aprov)checks.push(['w',`${i.cod}: o cadastro de facas indica FB ${i.cadTop.fb} (${i.cadTop.t} ${i.cadTop.cli} – ${i.cadTop.prod}), mas o histórico de O.S. usou FB ${i.fbSel}. Dá para trocar na lista de FB.`]);});
     its.forEach(i=>{if(i.cadHit&&i.fbSel===i.cadHit.fb)checks.push(['w',`${i.cod}: sem O.S. no histórico; FB ${i.cadHit.fb} sugerida pelo cadastro de facas (${i.cadHit.t} ${i.cadHit.cli} – ${i.cadHit.prod}). Confira.`]);});
@@ -569,12 +572,12 @@ const mmout=document.getElementById('mmout');
 mmout.addEventListener('toggle',e=>{const c=e.target.dataset&&e.target.dataset.conf;if(c!=null){e.target.open?OPENCONF.add(c):OPENCONF.delete(c);}},true);
 mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(d.q!=null){const it=ITEMS[d.q];const v=parseFloat(e.target.value);const id=e.target.id;
-    it.unid=isNaN(v)?null:Math.round(v);it.qSrc=it.unid==null?'':'informada';it.qNote='';
+    it.unid=isNaN(v)?null:Math.round(v*(it.mult||1));it.qSrc=it.unid==null?'':'informada';it.qNote='';
     ITEMS.forEach(x=>{if(x.fbSel===it.fbSel)x.nxMan=null;});render([]);const el=document.getElementById(id);if(el){el.focus();}return;}
   if(d.novo!=null){const it=ITEMS[d.novo];if(e.target.checked){saveNovo(it).then(r=>{if(r!==true&&r!=='local'){e.target.checked=false;alertNovo('Não foi possível salvar ('+r+').');}else render([]);});}else{delNovo(it.cod).then(()=>render([]));}return;}
   if(d.role!=null){ITEMS[d.role].apMan=e.target.value==='a';ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
   const n=d.nx,f=d.fb,al=d.alt;
-  if(al!=null){const it=ITEMS[al];it.cod=e.target.value;it.nome=NAMES[it.cod][0];const m2=it.nome.match(/\b(?:CX|PC|FD|PCT)\s*C\/\s*([\d.]+)/i);it.mult=m2?parseInt(m2[1].replace(/\./g,'')):it.mult;it.R=refs(it);it.cxo=cxOf(it.cod);it.cands=fbCands(it,it.R);it.fbSel=it.fb||it.cands[0]||'';if(it.qSrc!=='informada'){const h=(byCode[it.cod]||[]).find(r=>r.q);it.unid=h?h.q:null;it.qSrc=h?'qtd da última O.S. ('+h.os+')':'';}const hl=topc(it.R.rows,r=>r.lado);if(!it.lado){it.ladoFin=hl[0]?hl[0][0]:'';it.ladoSrc=hl[0]?'histórico':'';}render([]);return;}
+  if(al!=null){const it=ITEMS[al];it.cod=e.target.value;it.nome=NAMES[it.cod][0];const m2=it.nome.match(/\b(?:CX|PC|FD|PCT|PCTE|CXA)\s*C\/\s*([\d.]+)/i);if(m2){it.mult=parseInt(m2[1].replace(/\./g,''));it.multSrc='nome';}else{const cx=cxOf(it.cod);it.mult=cx&&typeof cx.q==='number'?cx.q:null;it.multSrc=it.mult?'Modelos':'';}it.R=refs(it);it.cxo=cxOf(it.cod);it.cands=fbCands(it,it.R);it.fbSel=it.fb||it.cands[0]||'';if(it.qSrc!=='informada'){const h=(byCode[it.cod]||[]).find(r=>r.q);it.unid=h?h.q:null;it.qSrc=h?'qtd da última O.S. ('+h.os+')':'';}const hl=topc(it.R.rows,r=>r.lado);if(!it.lado){it.ladoFin=hl[0]?hl[0][0]:'';it.ladoSrc=hl[0]?'histórico':'';}render([]);return;}
   if(n!=null){const v=parseInt(e.target.value);ITEMS[n].nxMan=v>0?v:null;render([]);}
   if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS[f].fb=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
 mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.dataset.cx;if(cx){try{localStorage.setItem('bm-cx2-'+cx,e.target.innerText.trim())}catch(x){}}});
