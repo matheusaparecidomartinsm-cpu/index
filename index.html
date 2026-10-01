@@ -192,7 +192,7 @@ label.chk.novo{white-space:nowrap}
     <div class="mm-in">
       <label for="mmtxt" class="mm-lbl">Produtos</label>
       <p class="sub mm-help">Um produto por linha. Opcional depois do nome: quantidade em caixas/pacotes, cores (4 0), lado, pedido e <span class="mono">-- observação</span>.</p>
-      <textarea id="mmtxt" rows="4" spellcheck="false"></textarea>
+      <textarea id="mmtxt" rows="6" spellcheck="false" placeholder="Um produto por linha, quantos quiser"></textarea>
       <div class="controls">
         <button class="btn pri" id="mmgo">Montar</button>
         <label class="chk"><input type="checkbox" id="mmun"> Quantidade digitada na linha já está em unidades</label>
@@ -501,7 +501,11 @@ function render(errs){
     </div>`;
     box.innerHTML=html;return;
   }
-  Object.entries(groups).forEach(([fb,its],gi)=>{
+  const mlist=[];Object.entries(groups).forEach(([fb,its])=>{const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
+    if(M&&its.length>M){const ord=[...its].sort((a,b)=>(a.aprov-b.aprov)||((b.unid||0)-(a.unid||0)));const n=Math.ceil(ord.length/M);
+      for(let k=0;k<n;k++)mlist.push([fb,ord.slice(k*M,(k+1)*M),`Montagem ${String(k+1).padStart(2,'0')} de ${String(n).padStart(2,'0')}`]);}
+    else mlist.push([fb,its,'']);});
+  mlist.forEach(([fb,its,mlab],gi)=>{
     const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
     const lo=fb!=='?'?lastOSofFB(fb):null;
     const papel=(()=>{const c=topc(its.flatMap(i=>i.R.rows.filter(r=>r.fb===fb)),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
@@ -532,7 +536,7 @@ function render(errs){
     if(fb==='?')checks.push(['w','Nenhuma FB encontrada no histórico para esses códigos. Informe com FB-0000 no início da linha.']);
     if(M&&somaNx!==M)checks.push(['w',`Soma dos Nx = ${somaNx}, mas a FB ${fb} tem ${M} moldes.`]);
     else if(M)checks.push(['o',`Soma dos Nx = ${somaNx} = ${M} moldes da FB ${fb}.`]);
-    if(its.length>(M||99))checks.push(['w',`São ${its.length} produtos para ${M} moldes. Precisa de mais de uma montagem.`]);
+    if(mlab)checks.push(['w',`São mais produtos do que os ${M} moldes da FB ${fb}; a biblioteca dividiu em montagens (esta é a ${mlab}). Cada montagem tem as suas folhas.`]);
     const fls=base.filter(i=>i.unid&&i.nx).map(i=>({i,f:Math.ceil(i.unid/i.nx)}));
     if(fls.length>1){const mn=Math.min(...fls.map(x=>x.f)),mx=Math.max(...fls.map(x=>x.f));
       if(mx===mn)checks.push(['o2',`Todos os materiais fecham em ${fmt(mx)} folhas.`]);
@@ -545,8 +549,8 @@ function render(errs){
     if(its.some(i=>!i.cxo))checks.push(['w','Sem caixa na planilha de modelos para: '+its.filter(i=>!i.cxo).map(i=>i.cod).join(', ')+'. Usei o histórico da O.S.']);
     if(cores.length>1||lados.length>1)checks.push(['w','Produtos com impressão ou lado diferentes no mesmo grupo. Confira se podem ir juntos.']);
     html+=`<div class="mmgrp" data-g="${gi}">
-     <div class="mmbar"><h3>FB ${esc(fb)}</h3><span class="sub">${M?M+' moldes':'moldes não encontrados'}${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
-      <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button>${unequal?`<button class="btn" data-eq="${esc(fb)}" data-fl="${folhas}">Igualar folhas (${fmt(folhas)})</button>`:''}<span class="src" id="cpmsg${gi}"></span></div>
+     <div class="mmbar"><h3>FB ${esc(fb)}${mlab?` <span class="chip">${esc(mlab)}</span>`:''}</h3><span class="sub">${M?M+' moldes':'moldes não encontrados'}${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
+      <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button>${unequal?`<button class="btn" data-eq="${esc(fb)}" data-eqi="${its.map(x=>ITEMS.indexOf(x)).join(',')}" data-fl="${folhas}">Igualar folhas (${fmt(folhas)})</button>`:''}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">FB ${esc(fb)}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
      ${(()=>{const nw=checks.filter(c=>c[0]==='w').length;const ok=checks.find(c=>c[0]==='o');const ok2=checks.find(c=>c[0]==='o2');return `<details class="conf" data-conf="${esc(fb)}"${OPENCONF.has(fb)?' open':''}><summary>Conferência${ok?` · <span class="okln">${esc(ok[1].split('.')[0])}</span>`:''}${ok2?` · <span class="okln">${esc(ok2[1].replace(/\.$/,''))}</span>`:''}${nw?` · <span class="chip warn">${nw} aviso${nw>1?'s':''}</span>`:''}</summary>`})()}
@@ -582,8 +586,8 @@ mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS[f].fb=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
 mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.dataset.cx;if(cx){try{localStorage.setItem('bm-cx2-'+cx,e.target.innerText.trim())}catch(x){}}});
 mmout.addEventListener('click',async e=>{
-  const eq=e.target.closest('[data-eq]');if(eq){const fb=eq.dataset.eq,fl=Number(eq.dataset.fl);
-    ITEMS.forEach(i=>{if(i.fbSel===fb&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
+  const eq=e.target.closest('[data-eq]');if(eq){const fl=Number(eq.dataset.fl);const sel=new Set(eq.dataset.eqi.split(',').map(Number));
+    ITEMS.forEach((i,ix)=>{if(sel.has(ix)&&!i.aprov&&i.nx){i.nxMan=i.nx;i.unid=fl*i.nx;i.qSrc='informada';}});render([]);return;}
   const ms=e.target.closest('[data-msplit]');if(ms){const idx=ms.dataset.msplit;const sel=[...mmout.querySelectorAll(`input[data-mfb="${idx}"]:checked`)].map(x=>x.value);
     if(sel.length<2){ms.insertAdjacentHTML('afterend','<span class="warnln"> Marque pelo menos 2 FBs.</span>');return;}
     const it=ITEMS[idx];try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=sel.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
