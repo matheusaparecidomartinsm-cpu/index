@@ -161,6 +161,10 @@ label.chk.novo{white-space:nowrap}
 .askmulti{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px}
 .askbtn.duo{border-color:rgba(163,230,53,.45)}
 .eqlog{margin:14px 0 0;font-size:13.5px}
+
+input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink)}
+.btn.mini{padding:3px 10px;font-size:12px}
+.ofbrow{display:flex;gap:4px;margin-top:4px}
 @media (max-width:560px){.card>summary{grid-template-columns:1fr}.meta{grid-column:1}h1{font-size:26px}}
 </style>
 
@@ -382,6 +386,10 @@ async function delNovo(cod){delete NOVOS[cod];if(byCode[cod])byCode[cod]=byCode[
 function alertNovo(m){const el=document.getElementById('mmout');if(el)el.insertAdjacentHTML('afterbegin',`<p class="warnln">${esc(m)}</p>`);}
 function renderNovos(){const el=document.getElementById('novoslist');if(!el)return;const L=Object.values(NOVOS).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   el.innerHTML=L.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Código</th><th>Produto</th><th>FB</th><th class="r">Nx</th><th>Papel</th><th>Lado</th><th>Caixa</th><th>Montagem</th></tr></thead><tbody>${L.map(d=>`<tr><td class="num">${esc((d.data||'').split('-').reverse().join('/'))}</td><td class="mono">${esc(d.cod)}</td><td>${esc(d.nome)}${d.aprov?' <span class="chip ap">aprov.</span>':''}</td><td>${esc(d.fb)}</td><td class="r">${d.nx?d.nx+'x':'—'}</td><td>${esc(d.papel)}</td><td>${esc(d.lado)}</td><td>${esc(d.caixa)}</td><td class="src">${esc(d.montagem)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="src">Nenhum material novo marcado ainda.</p>';}
+let CUSTOM_M={};try{CUSTOM_M=JSON.parse(localStorage.getItem('bm-moldes')||'{}')}catch(e){}
+function getM(fb){if(CUSTOM_M[fb])return Number(CUSTOM_M[fb]);const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):null;}
+function setM(fb,n){if(n>0)CUSTOM_M[fb]=n;else delete CUSTOM_M[fb];try{localStorage.setItem('bm-moldes',JSON.stringify(CUSTOM_M))}catch(e){}}
+function normFB(x){const d=String(x||'').replace(/\D/g,'');return d?d.padStart(4,'0'):'';}
 function cxOf(cod){const f=CX.full[cod];if(f)return {cx:f[0],q:f[1],src:'Modelos oficial (código)'};const m=CX.model[cod.split('.')[0]];if(m)return {cx:m[0],q:m[1],src:'Modelos oficial (modelo '+cod.split('.')[0]+')'};return null;}
 const FBI={};FB.forEach(f=>FBI[f.fb]=f);
 const lastOSofFB=fb=>OS.find(o=>o.fb.includes(fb));
@@ -429,7 +437,7 @@ function cadMatch(nome){if(!CADIDX)CADIDX=FBCAD.filter(c=>c[3]).map(c=>({t:c[0],
     .filter(c=>c.sc>=0.75&&c.tk.size>=2).sort((a,b)=>b.sc-a.sc).slice(0,5);}
 function combos(i){const m={};i.R.rows.forEach(r=>{if(r.fbs&&r.fbs.length>1&&!r.ap){const k=r.fbs.join('+');(m[k]=m[k]||{fbs:r.fbs,os:[]}).os.push(r.os);}});
   return Object.values(m).map(c=>({...c,os:[...new Set(c.os)]})).sort((a,b)=>b.os.length-a.os.length);}
-function splitItem(it,fbs){const Ms=fbs.map(fb=>{const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):1;});const tot=Ms.reduce((a,b)=>a+b,0);
+function splitItem(it,fbs){const Ms=fbs.map(fb=>getM(fb)||1);const tot=Ms.reduce((a,b)=>a+b,0);
   const at=ITEMS.indexOf(it);const Q=it.unid;let rest=Q;
   const copies=fbs.map((fb,k)=>{const c={...it,fb,fbSel:fb,split:fbs.join('+'),nxMan:null};
     if(Q!=null){c.unid=k===fbs.length-1?rest:Math.round(Q*Ms[k]/tot);rest-=c.unid;c.qSrc='informada';c.qNote=`dividida entre FB ${fbs.join(' + ')}`;}
@@ -439,7 +447,7 @@ function fbInfo(i,fb){const rows=i.R.rows.filter(r=>(r.fbs||[r.fb]).includes(fb)
   if(rows.length){const last=rows.reduce((m,r)=>Math.max(m,r.os),0);const na=rows.filter(r=>r.ap).length;parts.push(`${rows.length} registro(s) no histórico${na===rows.length?' como aproveitamento':(na?` (${na} como aproveitamento)`:'')}, última O.S. ${last}`);}
   else if(i.R.rows.some(r=>r.fb===fb&&r.novo))parts.push('material novo salvo');
   const cad=(CADBYFB[fb]||[]);if(cad.length)parts.push('cadastro '+cad.slice(0,2).map(c=>c.t+' '+c.prod).join('; '));
-  if(F&&F.moldes[0])parts.push(F.moldes[0][0]+' moldes');return parts.join(' · ')||'sem detalhes';}
+  {const m=getM(fb);if(m)parts.push(m+' moldes');}return parts.join(' · ')||'sem detalhes';}
 function fbCands(it,R){const m=cadMatch(it.nome);it.cadTop=m[0]||null;if(!R.rows.length){it.cadHit=m[0]||null;return [...new Set(m.map(x=>x.fb))];}it.cadExtra=[...new Set(m.map(x=>x.fb))];const best={};R.rows.forEach(r=>{(r.fbs&&r.fbs.length?r.fbs:[r.fb]).forEach(f=>{if(!f)return;const sc=(r.ap?0:1e6)+r.os-(f===r.fb?0:0.5);if(!best[f]||sc>best[f])best[f]=sc;});});const hist=Object.entries(best).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);return [...new Set([...hist,...(it.cadExtra||[])])];}
 const isPizza=i=>/PIZZA/i.test(i.nome);
 const isAprovCand=i=>/LAPELA/i.test(i.nome)||/BANDEJA\s+MULTIUSO\s+'?P'?(\s|$)/i.test(i.nome);
@@ -527,11 +535,12 @@ function render(errs){
       return `<div class="askitem"><div><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</div><div class="askopts">${i.cands.map(fb=>{const inf=fbInfo(i,fb);
         return `<button class="btn askbtn" data-pick="${idx}" data-pfb="${esc(fb)}"><b>FB ${esc(fb)}</b><span>${esc(inf)}</span>${fb===last?'<em>última escolha</em>':''}</button>`}).join('')}
         ${combos(i).map(c=>`<button class="btn askbtn duo" data-pick="${idx}" data-pfb="${esc(c.fbs.join('+'))}"><b>FB ${esc(c.fbs.join(' + '))}</b><span>usadas juntas na mesma O.S. (${c.os.length}x) (última ${Math.max(...c.os)})</span>${c.fbs.join('+')===last?'<em>última escolha</em>':''}</button>`).join('')}</div>
+        <div class="askmulti"><span class="src">Outra FB:</span><input class="ofb" id="ofb${idx}" placeholder="ex.: 2486" aria-label="Outra FB para ${esc(i.cod)}"><input class="ofb" id="omd${idx}" type="number" min="1" placeholder="moldes" aria-label="Moldes da outra FB"><button class="btn" data-other="${idx}">Usar esta FB</button></div>
         <div class="askmulti"><span class="src">Usar mais de uma FB:</span>${i.cands.map(fb=>`<label class="chk"><input type="checkbox" data-mfb="${idx}" value="${esc(fb)}"> ${esc(fb)}</label>`).join('')}<button class="btn" data-msplit="${idx}">Dividir entre as marcadas</button></div></div>`}).join('')}
     </div>`;
     box.innerHTML=html;return;
   }
-  const mlist=[];Object.entries(groups).forEach(([fb,its])=>{const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
+  const mlist=[];Object.entries(groups).forEach(([fb,its])=>{const M=getM(fb);
     if(its.some(i=>i.mont)){const by={};its.forEach(i=>{const m=i.mont||1;(by[m]=by[m]||[]).push(i);});const ks=Object.keys(by).map(Number).sort((x,y)=>x-y);
       ks.forEach((m,k)=>mlist.push([fb,by[m],`Montagem ${String(k+1).padStart(2,'0')}`,true]));}
     else if(M&&its.length>M){const ord=[...its].sort((a,b)=>(a.aprov-b.aprov)||((b.unid||0)-(a.unid||0)));const n=Math.ceil(ord.length/M);
@@ -539,7 +548,7 @@ function render(errs){
     else mlist.push([fb,its,'',false]);});
   const PARTS=[];
   mlist.forEach(([fb,its,mlab,manual],mi)=>{
-    const F=FBI[fb];const M=F&&F.moldes[0]?Number(F.moldes[0][0]):null;
+    const M=getM(fb);
     const lo=fb!=='?'?lastOSofFB(fb):null;
     const papel=(()=>{const c=topc(its.flatMap(i=>i.R.rows.filter(r=>r.fb===fb)),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
     const mains=its.filter(i=>!i.aprov),aps=its.filter(i=>i.aprov);const hasAp=mains.length&&aps.length;
@@ -589,7 +598,7 @@ function render(errs){
       <div class="tbl"><table><thead><tr><th>Código</th><th>FB</th><th class="r">Unid</th><th class="r">Nx</th><th class="r">Produz</th><th>Lado</th><th>Caixa</th><th>Referência usada</th></tr></thead><tbody>
       ${its.map(i=>{const idx=ITEMS.indexOf(i);const last=i.R.rows.find(r=>r.fb===i.fbSel)||i.R.rows[0];const prod=folhas&&i.nx?folhas*i.nx:null;
         return `<tr><td class="mono">${esc(i.cod)}${i.aprov?' <span class="chip ap">aprov.</span>':''}${i.byName?`<div class="src">achado pelo nome</div>${i.matches.length>1?`<select data-alt="${idx}" aria-label="Outros produtos parecidos">${i.matches.map(m=>`<option value="${esc(m.c)}"${m.c===i.cod?' selected':''}>${esc(m.c)} ${esc(m.n)}${m.last?' · últ. O.S. '+m.last:' · sem O.S.'}</option>`).join('')}</select>`:''}`:''}</td>
-        <td><select data-fb="${idx}">${[...new Set([i.fbSel,...i.cands].filter(Boolean))].map(f=>`<option${f===i.fbSel?' selected':''}>${esc(f)}</option>`).join('')||'<option>?</option>'}</select></td>
+        <td><select data-fb="${idx}">${[...new Set([i.fbSel,...i.cands].filter(Boolean))].map(f=>`<option${f===i.fbSel?' selected':''}>${esc(f)}</option>`).join('')||'<option>?</option>'}</select><div class="ofbrow"><input class="ofb" id="cfb${idx}" placeholder="outra FB" aria-label="Outra FB para ${esc(i.cod)}"><button class="btn mini" data-other="${idx}" data-c="1">usar</button></div></td>
         <td class="r">${i.unid!=null?fmt(i.unid):'—'}</td>
         <td class="r"><input type="number" min="1" value="${i.nx||''}" data-nx="${idx}" aria-label="Nx ${esc(i.cod)}">${i.nxMan?'':'<div class="src">sugerido</div>'}</td>
         <td class="r">${prod?fmt(prod):'—'}${prod&&i.unid?`<div class="src">${i.nx?fmt(Math.ceil(i.unid/i.nx))+' fls · ':''}sobra ${fmt(prod-i.unid)}</div>`:''}</td>
@@ -608,7 +617,7 @@ function render(errs){
     const papel=uniq(parts.map(p=>p.papel)).join(' / ');const cores=uniq(parts.flatMap(p=>p.cores));const lados=uniq(parts.flatMap(p=>p.lados));
     const caixa=uniq(parts.map(p=>p.caixa)).join(' / ');const M=p0.M,lo=p0.lo;
     html+=`<div class="mmgrp" data-g="${gi}">
-     <div class="mmbar"><h3>FB ${esc(fb)}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes':'moldes não encontrados'}${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
+     <div class="mmbar"><h3>FB ${esc(fb)}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
       <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">FB ${esc(fb)}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
@@ -642,6 +651,13 @@ mmout.addEventListener('click',async e=>{
     if(sel.length<2){ms.insertAdjacentHTML('afterend','<span class="warnln"> Marque pelo menos 2 FBs.</span>');return;}
     const it=ITEMS[idx];try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=sel.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     splitItem(it,sel);ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  const ot=e.target.closest('[data-other]');if(ot){const idx=ot.dataset.other;const it=ITEMS[idx];
+    const fb=normFB(document.getElementById((ot.dataset.c?'cfb':'ofb')+idx).value);if(!fb){ot.insertAdjacentHTML('afterend','<span class="warnln"> Digite o número da FB.</span>');return;}
+    const md=document.getElementById('omd'+idx);if(md&&Number(md.value)>0)setM(fb,Number(md.value));
+    it.fb=fb;it.fbSel=fb;if(!it.cands.includes(fb))it.cands=[fb,...it.cands];
+    try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fb;localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
+    ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  const sm=e.target.closest('[data-setm]');if(sm){const v=Number(document.getElementById('md'+sm.dataset.gi).value);setM(sm.dataset.setm,v);ITEMS.forEach(x=>{if(x.fbSel===sm.dataset.setm)x.nxMan=null;});render([]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&pk.dataset.pfb.includes('+')){const it=ITEMS[pk.dataset.pick];const fbs=pk.dataset.pfb.split('+');
     try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fbs.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     splitItem(it,fbs);ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
