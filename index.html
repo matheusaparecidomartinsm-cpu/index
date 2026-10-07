@@ -229,6 +229,8 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
         <p>Na aba Montar material, quando há pizza na lista, as lapelas e bandejas multiuso P entram por padrão como aproveitamento, na FB da pizza: ocupam metade dos moldes e a quantidade delas sai de folhas × Nx. No quadro Quantidades dá para trocar qualquer item entre Principal e Aproveitamento (a Bandeja P pode ser os dois).</p>
         <h3><span class="tag c">Confirmada</span> Todos os materiais fecham nas mesmas folhas</h3>
         <p>Numa montagem, mesmo com vários materiais, todos têm que terminar na mesma quantidade de folhas. O Montar material distribui os Nx para chegar nisso e, quando as quantidades não permitem, mostra quanto cada material precisa ter para bater.</p>
+        <h3><span class="tag c">Confirmada</span> Papel bandeja = Corte Guilhotina</h3>
+        <p>Papéis bandeja não têm FB. No Montar material eles saem sempre com Faca "Corte Guilhotina" e os cortes por folha do histórico.</p>
         <h3><span class="tag c">Confirmada</span> Multiplicador no nome</h3>
         <p>A quantidade é multiplicada pelo C/N do nome (CX C/100, PC C/1000, FD C/1000). Sem multiplicador explícito, nada é multiplicado.</p>
         <h3><span class="tag c">Confirmada</span> Formato de resposta</h3>
@@ -387,7 +389,10 @@ function alertNovo(m){const el=document.getElementById('mmout');if(el)el.insertA
 function renderNovos(){const el=document.getElementById('novoslist');if(!el)return;const L=Object.values(NOVOS).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   el.innerHTML=L.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Código</th><th>Produto</th><th>FB</th><th class="r">Nx</th><th>Papel</th><th>Lado</th><th>Caixa</th><th>Montagem</th></tr></thead><tbody>${L.map(d=>`<tr><td class="num">${esc((d.data||'').split('-').reverse().join('/'))}</td><td class="mono">${esc(d.cod)}</td><td>${esc(d.nome)}${d.aprov?' <span class="chip ap">aprov.</span>':''}</td><td>${esc(d.fb)}</td><td class="r">${d.nx?d.nx+'x':'—'}</td><td>${esc(d.papel)}</td><td>${esc(d.lado)}</td><td>${esc(d.caixa)}</td><td class="src">${esc(d.montagem)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="src">Nenhum material novo marcado ainda.</p>';}
 let CUSTOM_M={};try{CUSTOM_M=JSON.parse(localStorage.getItem('bm-moldes')||'{}')}catch(e){}
-function getM(fb){if(CUSTOM_M[fb])return Number(CUSTOM_M[fb]);const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):null;}
+const GUIL='GUILHOTINA';let GUIL_M=null;
+const isPapelBandeja=i=>/PAPEL\s+(DE\s+)?BANDEJA/i.test(i.nome||'');
+const fbLabel=fb=>fb===GUIL?'Corte Guilhotina':'FB '+fb;
+function getM(fb){if(CUSTOM_M[fb])return Number(CUSTOM_M[fb]);if(fb===GUIL)return GUIL_M;const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):null;}
 function setM(fb,n){if(n>0)CUSTOM_M[fb]=n;else delete CUSTOM_M[fb];try{localStorage.setItem('bm-moldes',JSON.stringify(CUSTOM_M))}catch(e){}}
 function normFB(x){const d=String(x||'').replace(/\D/g,'');return d?d.padStart(4,'0'):'';}
 function cxOf(cod){const f=CX.full[cod];if(f)return {cx:f[0],q:f[1],src:'Modelos oficial (código)'};const m=CX.model[cod.split('.')[0]];if(m)return {cx:m[0],q:m[1],src:'Modelos oficial (modelo '+cod.split('.')[0]+')'};return null;}
@@ -466,6 +471,7 @@ function montar(){
     p.unid=p.qtd==null?null:(un||!p.mult?p.qtd:p.qtd*p.mult);p.qSrc=p.qtd==null?'':'informada';
     if(p.unid==null){const h=(byCode[p.cod]||[]).find(r=>r.q);if(h){p.unid=h.q;p.qSrc='qtd da última O.S. ('+h.os+')';}}
     const hl=topc(p.R.rows,r=>r.lado);p.ladoFin=p.lado||(hl[0]?hl[0][0]:'');p.ladoSrc=p.lado?'informado':(hl[0]?'histórico':'');
+    if(isPapelBandeja(p)&&!p.fb){p.fb=GUIL;p.fbSel=GUIL;p.cands=[GUIL];p.cadTop=null;}
     p.cxo=cxOf(p.cod);p.nxMan=null;ITEMS.push(p);});
   applyRoles();render(errs);
 }
@@ -516,6 +522,7 @@ function distribute(items,M){
 function render(errs){
   const box=document.getElementById('mmout');
   if(!ITEMS.length){box.innerHTML=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';return;}
+  {const gi=ITEMS.filter(i=>i.fbSel===GUIL);const c=topc(gi.flatMap(i=>i.R.rows),r=>r.moldes);GUIL_M=c[0]?Number(c[0][0]):null;}
   const groups={};ITEMS.forEach(it=>{(groups[it.fbSel||'?']=groups[it.fbSel||'?']||[]).push(it)});
   let html=errs.length?`<p class="warnln">${errs.map(esc).join('<br>')}</p>`:'';
   if(EQLOG){html+=`<p class="okln eqlog">${esc(EQLOG)}</p>`;EQLOG='';}
@@ -550,7 +557,7 @@ function render(errs){
   mlist.forEach(([fb,its,mlab,manual],mi)=>{
     const M=getM(fb);
     const lo=fb!=='?'?lastOSofFB(fb):null;
-    const papel=(()=>{const c=topc(its.flatMap(i=>i.R.rows.filter(r=>r.fb===fb)),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
+    const papel=(()=>{const c=topc(its.flatMap(i=>(fb===GUIL?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
     const mains=its.filter(i=>!i.aprov),aps=its.filter(i=>i.aprov);const hasAp=mains.length&&aps.length;
     if(hasAp&&M&&M%2===0){const h=M/2;const w=a=>a.map(i=>Object.assign(Object.create(i),{unid:i.unid||1}));
       const n1=distribute(w(mains),h),n2=distribute(w(aps),h);mains.forEach((it,k)=>it.nx=it.nxMan||n1[k]);aps.forEach((it,k)=>it.nx=it.nxMan||n2[k]);}
@@ -560,7 +567,7 @@ function render(errs){
     its.forEach(i=>i.unidOut=(hasAp&&i.aprov)?(folhas&&i.nx?folhas*i.nx:null):i.unid);
     const cores=[...new Set(its.map(i=>i.cores).filter(Boolean))];
     const lados=[...new Set(its.map(i=>i.ladoFin).filter(Boolean))];
-    const embH=topc(its.flatMap(i=>i.R.rows.filter(r=>r.fb===fb)),r=>r.emb);
+    const embH=topc(its.flatMap(i=>(fb===GUIL?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.emb);
     its.forEach(i=>i.cxo=cxOf(i.cod));
     const cxs=[...new Set(its.map(i=>i.cxo&&i.cxo.cx).filter(Boolean))];
     let saved='';try{saved=localStorage.getItem('bm-cx2-'+fb)||''}catch(e){}
@@ -573,12 +580,13 @@ function render(errs){
     const checks=[];
     its.forEach(i=>{if(!i.mult)checks.push(['w',`${i.cod}: o nome não tem C/N e a planilha de Modelos não tem quantidade por caixa; a quantidade foi usada como unidades.`]);else if(i.multSrc==='Modelos')checks.push(['w',`${i.cod}: o nome não tem C/N; usei ${fmt(i.mult)} un por caixa da planilha de Modelos.`]);});
     its.forEach(i=>{if(i.split)checks.push(['w',`${i.cod}: material dividido entre FB ${i.split.replace(/\+/g,' + ')}. Esta montagem tem ${fmt(i.unid||0)} un; confira as quantidades de cada FB no quadro Quantidades.`]);});
-    its.forEach(i=>{if(!i.cadHit&&i.cadTop&&i.cadTop.fb!==i.fbSel&&!i.aprov)checks.push(['w',`${i.cod}: o cadastro de facas indica FB ${i.cadTop.fb} (${i.cadTop.t} ${i.cadTop.cli} – ${i.cadTop.prod}), mas o histórico de O.S. usou FB ${i.fbSel}. Dá para trocar na lista de FB.`]);});
+    its.forEach(i=>{if(i.fbSel!==GUIL&&!i.cadHit&&i.cadTop&&i.cadTop.fb!==i.fbSel&&!i.aprov)checks.push(['w',`${i.cod}: o cadastro de facas indica FB ${i.cadTop.fb} (${i.cadTop.t} ${i.cadTop.cli} – ${i.cadTop.prod}), mas o histórico de O.S. usou FB ${i.fbSel}. Dá para trocar na lista de FB.`]);});
     its.forEach(i=>{if(i.cadHit&&i.fbSel===i.cadHit.fb)checks.push(['w',`${i.cod}: sem O.S. no histórico; FB ${i.cadHit.fb} sugerida pelo cadastro de facas (${i.cadHit.t} ${i.cadHit.cli} – ${i.cadHit.prod}). Confira.`]);});
+    if(fb===GUIL)checks.push(['w',`Papel bandeja não usa FB: Faca = Corte Guilhotina. Cortes por folha${M?': '+M+' (do histórico)':' não encontrados; defina no campo moldes'}.`]);
     if(fb==='?')checks.push(['w','Nenhuma FB encontrada no histórico para esses códigos. Informe com FB-0000 no início da linha.']);
-    if(M&&somaNx!==M)checks.push(['w',`Soma dos Nx = ${somaNx}, mas a FB ${fb} tem ${M} moldes.`]);
-    else if(M)checks.push(['o',`Soma dos Nx = ${somaNx} = ${M} moldes da FB ${fb}.`]);
-    if(mlab&&!manual)checks.push(['w',`São mais produtos do que os ${M} moldes da FB ${fb}; a biblioteca dividiu em montagens (esta é a ${mlab}). Cada montagem tem as suas folhas.`]);
+    if(M&&somaNx!==M)checks.push(['w',`Soma dos Nx = ${somaNx}, mas ${fb===GUIL?'o Corte Guilhotina':'a FB '+fb} tem ${M} ${fb===GUIL?'cortes':'moldes'}.`]);
+    else if(M)checks.push(['o',`Soma dos Nx = ${somaNx} = ${M} ${fb===GUIL?'cortes do Corte Guilhotina':'moldes da FB '+fb}.`]);
+    if(mlab&&!manual)checks.push(['w',`São mais produtos do que os ${M} ${fb===GUIL?'cortes do Corte Guilhotina':'moldes da FB '+fb}; a biblioteca dividiu em montagens (esta é a ${mlab}). Cada montagem tem as suas folhas.`]);
     const fls=base.filter(i=>i.unid&&i.nx).map(i=>({i,f:Math.ceil(i.unid/i.nx)}));
     if(fls.length>1){const mn=Math.min(...fls.map(x=>x.f)),mx=Math.max(...fls.map(x=>x.f));
       if(mx===mn)checks.push(['o2',`Todos os materiais fecham em ${fmt(mx)} folhas.`]);
@@ -617,10 +625,10 @@ function render(errs){
     const papel=uniq(parts.map(p=>p.papel)).join(' / ');const cores=uniq(parts.flatMap(p=>p.cores));const lados=uniq(parts.flatMap(p=>p.lados));
     const caixa=uniq(parts.map(p=>p.caixa)).join(' / ');const M=p0.M,lo=p0.lo;
     html+=`<div class="mmgrp" data-g="${gi}">
-     <div class="mmbar"><h3>FB ${esc(fb)}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
+     <div class="mmbar"><h3>${esc(fbLabel(fb))}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
       <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
-     <tbody><tr><td contenteditable="true">FB ${esc(fb)}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
+     <tbody><tr><td contenteditable="true">${esc(fbLabel(fb))}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
      ${parts.map(p=>p.conf).join('')}</div>`;
   });
   box.innerHTML=html;
