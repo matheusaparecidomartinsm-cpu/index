@@ -201,6 +201,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
       <textarea id="mmtxt" rows="6" spellcheck="false" placeholder="Um produto por linha, quantos quiser"></textarea>
       <div class="controls">
         <button class="btn pri" id="mmgo">Montar</button>
+        <button class="btn" id="mmxls">Exportar planilha</button><span class="src" id="mmxlsmsg"></span>
         <label class="chk"><input type="checkbox" id="mmun"> Quantidade digitada na linha já está em unidades</label>
         <button class="btn" id="mmex">Carregar exemplo</button>
         <button class="btn" id="mmclr">Limpar</button>
@@ -501,7 +502,7 @@ async function saveFile(name,blob){
     if(c==='rate_limited')throw new Error('já existe uma confirmação de download aberta; feche-a e tente de novo');
     throw new Error((c||'erro')+(e&&e.message?': '+e.message:''));}}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);return 'ok';}
-async function exportMat(kind){const msg=document.getElementById('expmsg');const {head,rows}=matRows();
+async function exportMat(kind,msgId){const msg=document.getElementById(msgId||'expmsg')||{set textContent(v){}};const {head,rows}=matRows();
   if(!rows.length){msg.textContent='Monte o material antes de exportar.';return;}
   const d=new Date();const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
   msg.textContent='Gerando…';
@@ -733,6 +734,7 @@ mmout.addEventListener('click',async e=>{
   catch(err){try{await navigator.clipboard.writeText(tsv);msg.textContent='Copiado como texto.';}catch(e2){const r=document.createRange();r.selectNodeContents(tb);const s=getSelection();s.removeAllRanges();s.addRange(r);msg.textContent='Tabela selecionada. Use Ctrl+C.';}}
 });
 document.getElementById('mmgo').onclick=montar;
+document.getElementById('mmxls').onclick=()=>exportMat('xlsx','mmxlsmsg');
 document.getElementById('mmex').onclick=()=>{document.getElementById('mmtxt').value=EX;montar();};
 document.getElementById('mmclr').onclick=()=>{document.getElementById('mmtxt').value='';ITEMS=[];render([]);};
 document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))montar();});
