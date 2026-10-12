@@ -197,11 +197,11 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
   <section id="tab-mm">
     <div class="mm-in">
       <label for="mmtxt" class="mm-lbl">Produtos</label>
-      <p class="sub mm-help">Um produto por linha. Opcional depois do nome: quantidade em caixas/pacotes, cores (4 0), lado, pedido e <span class="mono">-- observação</span>.</p>
+      <p class="sub mm-help">Um produto por linha, ou importe uma planilha (.xlsx/.csv) com colunas como Código, Produto, Quantidade, Cores, Lado, Pedido, Obs. Opcional depois do nome: quantidade em caixas/pacotes, cores (4 0), lado, pedido e <span class="mono">-- observação</span>.</p>
       <textarea id="mmtxt" rows="6" spellcheck="false" placeholder="Um produto por linha, quantos quiser"></textarea>
       <div class="controls">
         <button class="btn pri" id="mmgo">Montar</button>
-        <button class="btn" id="mmxls">Exportar planilha</button><span class="src" id="mmxlsmsg"></span>
+        <button class="btn" id="mmimp">Importar planilha</button><input type="file" id="mmfile" accept=".xlsx,.xlsm,.csv,.txt" hidden><span class="src" id="mmimpmsg"></span>
         <label class="chk"><input type="checkbox" id="mmun"> Quantidade digitada na linha já está em unidades</label>
         <button class="btn" id="mmex">Carregar exemplo</button>
         <button class="btn" id="mmclr">Limpar</button>
@@ -734,7 +734,27 @@ mmout.addEventListener('click',async e=>{
   catch(err){try{await navigator.clipboard.writeText(tsv);msg.textContent='Copiado como texto.';}catch(e2){const r=document.createRange();r.selectNodeContents(tb);const s=getSelection();s.removeAllRanges();s.addRange(r);msg.textContent='Tabela selecionada. Use Ctrl+C.';}}
 });
 document.getElementById('mmgo').onclick=montar;
-document.getElementById('mmxls').onclick=()=>exportMat('xlsx','mmxlsmsg');
+document.getElementById('mmimp').onclick=()=>document.getElementById('mmfile').click();
+document.getElementById('mmfile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)importPedidos(f);};
+async function importPedidos(f){const msg=document.getElementById('mmimpmsg');msg.textContent='Lendo '+f.name+'…';
+  try{let rows=[];
+    if(/\.csv$|\.txt$/i.test(f.name)){const tx=await f.text();const sep=(tx.split('\n')[0].match(/;/g)||[]).length>(tx.split('\n')[0].match(/,/g)||[]).length?';':(tx.includes('\t')?'\t':',');rows=tx.split(/\r?\n/).filter(l=>l.trim()).map(l=>l.split(sep).map(x=>x.replace(/^"|"$/g,'').trim()));}
+    else if(/\.xlsx$|\.xlsm$/i.test(f.name)){const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.worksheets[0];
+      ws.eachRow({includeEmpty:false},r=>{const v=[];r.eachCell({includeEmpty:true},(c,i)=>{let x=c.value;if(x&&typeof x==='object')x=x.text||x.result||(x.richText?x.richText.map(t=>t.text).join(''):'');v[i-1]=x==null?'':String(x).trim();});rows.push(v);});}
+    else throw new Error('use .xlsx ou .csv (arquivo .xls antigo: salve como .xlsx no Excel)');
+    rows=rows.filter(r=>r.some(x=>x));if(!rows.length)throw new Error('a planilha está vazia');
+    const H=rows[0].map(x=>norm(x));const find=re=>H.findIndex(h=>re.test(h));
+    const col={fb:find(/^fb|faca/),cod:find(/cod/),nome:find(/produto|descr|nome|item/),q:find(/qtd|quant|caixa|pacote/),cores:find(/cor|impress/),lado:find(/lado/),ped:find(/pedido|ped\b/),obs:find(/obs/)};
+    const hasHead=Object.values(col).some(i=>i>=0)&&(col.nome>=0||col.cod>=0);
+    const body=hasHead?rows.slice(1):rows;
+    const lines=body.map(r=>{if(!hasHead)return r.filter(Boolean).join(' ');
+      const g=k=>col[k]>=0?(r[col[k]]||''):'';let fb=g('fb').replace(/\D/g,'');let cores=g('cores').replace(/\s*[x\/]\s*/i,' ').trim();
+      const q=g('q').replace(/\./g,'').replace(',','.');
+      return [fb?'FB-'+fb:'',g('cod'),g('nome'),q,cores,g('lado'),g('ped').replace(/\D/g,''),g('obs')?'-- '+g('obs'):''].filter(Boolean).join(' ');}).filter(l=>l.trim());
+    if(!lines.length)throw new Error('não achei produtos nas linhas');
+    document.getElementById('mmtxt').value=lines.join('\n');document.getElementById('mmun').checked=false;montar();
+    msg.textContent=`${lines.length} produto(s) importado(s) de ${f.name}.`;
+  }catch(err){msg.textContent='Não consegui importar: '+(err&&err.message||err);}}
 document.getElementById('mmex').onclick=()=>{document.getElementById('mmtxt').value=EX;montar();};
 document.getElementById('mmclr').onclick=()=>{document.getElementById('mmtxt').value='';ITEMS=[];render([]);};
 document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))montar();});
