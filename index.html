@@ -689,7 +689,7 @@ function render(errs){
     const caixa=uniq(parts.map(p=>p.caixa)).join(' / ');const M=p0.M,lo=p0.lo;
     html+=`<div class="mmgrp" data-g="${gi}">
      <div class="mmbar"><h3>${esc(fbLabel(fb))}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
-      <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
+      <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">${esc(fbLabel(fb))}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
      ${parts.map(p=>p.conf).join('')}</div>`;
@@ -736,6 +736,7 @@ mmout.addEventListener('click',async e=>{
     try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fb;localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     const md=it.cod.split('.')[0];ITEMS.forEach(o=>{if(o!==it&&!o.fb&&!o.aprov&&o.cands.length>1&&o.cod.split('.')[0]===md&&o.cands.includes(fb)){o.fb=fb;o.fbSel=fb;}});
     ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  const g1=e.target.closest('[data-gsone]');if(g1){const tb=document.getElementById('xt'+g1.dataset.gsone);sendGS(false,tb?[[...tb.querySelectorAll('tbody td')].map(td=>td.innerText.trim())]:null,'cpmsg'+g1.dataset.gsone);return;}
   const ex=e.target.closest('[data-exp]');if(ex){if(ex.dataset.exp==='gs'||ex.dataset.exp==='gsurl'){sendGS(ex.dataset.exp==='gsurl');return;}exportMat(ex.dataset.exp);return;}
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
   const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;ITEMS.forEach(i=>{if(NOVOS[i.cod]&&i._g)saveNovo(i);});const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
@@ -774,9 +775,9 @@ document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Ente
 document.getElementById('mmtxt').value=EX;montar();
 renderNovos();
 
-async function sendGS(cfg){const msg=document.getElementById('expmsg');let url='';try{url=localStorage.getItem('bm-gsurl')||''}catch(e){}
+async function sendGS(cfg,only,msgId){const msg=document.getElementById(msgId||'expmsg');let url='';try{url=localStorage.getItem('bm-gsurl')||''}catch(e){}
   if(cfg||!url){const u=prompt('Cole o link do Apps Script (termina em /exec):',url);if(!u)return;url=u.trim();try{localStorage.setItem('bm-gsurl',url)}catch(e){}if(cfg){msg.textContent='Link salvo.';return;}}
-  const {rows}=matRows();if(!rows.length){msg.textContent='Monte o material primeiro.';return;}
+  const rows=only||matRows().rows;if(!rows.length){msg.textContent='Monte o material primeiro.';return;}
   msg.textContent='Enviando…';
   try{await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({rows})});
     msg.textContent=`Enviado: ${rows.length} montagem(ns) para a aba "export montagem claude".`;}
