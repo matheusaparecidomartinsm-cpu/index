@@ -208,7 +208,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
         <button class="btn" id="mmclr">Limpar</button>
       </div>
     </div>
-    <div class="controls" id="txbar" hidden><button class="btn" id="txcp">Copiar texto</button><span class="src" id="txmsg"></span></div><div id="txout"></div><div id="mmout"></div>
+    <div id="mmout"></div>
   </section>
   <section id="tab-os" hidden><div class="count" id="cnt"></div><div id="list"></div><button class="more" id="more" hidden>Mostrar mais</button></section>
   <section id="tab-fb" hidden><div class="count" id="cntfb"></div><div class="fbgrid" id="fblist"></div><button class="more" id="morefb" hidden>Mostrar mais</button></section>
@@ -366,26 +366,8 @@ document.getElementById('more').onclick=more;document.getElementById('morefb').o
 document.getElementById('fblist').addEventListener('click',e=>{const b=e.target.closest('.linkos');if(!b)return;document.getElementById('q').value=b.dataset.os;tab('os');run();window.scrollTo(0,0)});
 run();runfb();
 
-// ===== Texto de O.S. (linhas de pedido coladas em Montar material) =====
-(function(){
-const fmt=n=>n.toLocaleString('pt-BR');
-const RX=/^\s*(FB[-\s]?\d+)?\s*(\d{3,5}\.\d+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-zÀ-ú]+)\s+(\d+)(?:\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?))?\s*$/;
-const lines=()=>document.getElementById('mmtxt').value.split('\n').filter(l=>l.trim()).map(l=>l.replace(/\t/g,' '));
-function isPed(){const ls=lines();return ls.length&&ls.every(l=>RX.test(l))}
-function clear(){document.getElementById('txout').innerHTML='';document.getElementById('txbar').hidden=true}
-function gerar(){const g=new Map();
-  for(const l of lines()){const [,fb,cod,nome,cx,nx,,lado,ped,ent]=l.match(RX);const cn=(nome.match(/C\/\s*(\d[\d.]*)/i)||[])[1];const mult=cn?+cn.replace(/\./g,''):1;
-    const k=(fb||'')+'|'+cod+'|'+nx;if(!g.has(k))g.set(k,{cod,nome:nome.trim(),nx:+nx,peds:[]});
-    g.get(k).peds.push({ped,ent:ent||'__/__',un:+cx*mult})}
-  const txt=[...g.values()].map(x=>{const tot=x.peds.reduce((s,p)=>s+p.un,0);
-    return [`Imprimir ${fmt(Math.ceil(tot/x.nx))} Folhas`,`${fmt(tot)}Unid - ${x.cod} ${x.nome}= ${x.nx}x`,...x.peds.map(p=>`--Ped.${p.ped}    Entrega ${p.ent}    ${fmt(p.un)}Unid`)].join('\n')}).join('\n\n');
-  window._txt=txt;document.getElementById('mmout').innerHTML='';
-  document.getElementById('txout').innerHTML=`<pre class="txbox">${esc(txt)}</pre>`;document.getElementById('txbar').hidden=false;document.getElementById('txmsg').textContent='';}
-document.addEventListener('click',e=>{if(e.target.closest('#mmgo')){if(isPed()){e.stopPropagation();e.preventDefault();gerar()}else clear()}},true);
-document.addEventListener('keydown',e=>{if(e.target.id==='mmtxt'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){if(isPed()){e.stopPropagation();e.preventDefault();gerar()}else clear()}},true);
-document.getElementById('txcp').onclick=()=>{navigator.clipboard.writeText(window._txt||'').then(()=>{document.getElementById('txmsg').textContent='Copiado.'})};
-})();
 // ===== Montar material =====
+
 const byCode={},byModel={};
 OS.forEach(o=>{const pa=o.papel[0]||{};o.monts.forEach(m=>m.itens.forEach(i=>{
   const r={os:o.os,ab:o.ab,fbs:o.fb,fb:o.fb[0]||'',faca:o.faca[0]||'',papel:pa.nome?`${pa.nome} ${pa.gram??''}g`.trim():'',moldes:o.moldes,nx:i.nx,lado:m.lado,emb:i.emb||o.emb.join(' // '),ap:i.ap,nome:i.nome,cod:i.cod,folhas:m.folhas,q:i.q};
@@ -441,6 +423,7 @@ function parseLine(raw){
   const cm=s.match(/(\d{3,5}\.\d+)/);let cod=cm?cm[1]:'';let rest=cm?s.slice(cm.index+cod.length).trim():s;
   let tk=rest.split(' '),ped='',lado='',cores='',qtd=null;
   const t=()=>tk[tk.length-1];
+  let ent='';if(tk.length>1&&/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(t()))ent=tk.pop();
   if(tk.length>1&&/^\d{6,}$/.test(t()))ped=tk.pop();
   if(tk.length>1&&/^(branco|pardo)$/i.test(t())){lado=t()[0].toUpperCase()+t().slice(1).toLowerCase();tk.pop();}
   if(tk.length>2&&/^\d$/.test(t())&&/^\d$/.test(tk[tk.length-2])){const b=tk.pop(),a=tk.pop();cores=`${a}X${b}`;}
@@ -453,7 +436,7 @@ function parseLine(raw){
   const official=NAMES[cod]?NAMES[cod][0]:'';
   if(byName||!nome)nome=official||nome;
   const mm2=nome.match(/\b(?:CX|PC|FD|PCT|PCTE|CXA)\s*C\/\s*([\d.]+)/i);
-  return {fb,cod,nome,qtd,mult:mm2?parseInt(mm2[1].replace(/\./g,'')):mult,cores,lado,ped,note,matches,byName,typed:raw.trim()};
+  return {fb,cod,nome,qtd,mult:mm2?parseInt(mm2[1].replace(/\./g,'')):mult,cores,lado,ped,ent,note,matches,byName,typed:raw.trim()};
 }
 function refs(it){const ex=byCode[it.cod];if(ex&&ex.length)return {rows:ex,how:'código exato'};
   const md=byModel[it.cod.split('.')[0]];if(md&&md.length)return {rows:md,how:`modelo ${it.cod.split('.')[0]} (código novo, sem histórico próprio)`};return {rows:[],how:'sem histórico'};}
@@ -495,7 +478,11 @@ function montar(){
     if(p.unid==null){const h=(byCode[p.cod]||[]).find(r=>r.q);if(h){p.unid=h.q;p.qSrc='qtd da última O.S. ('+h.os+')';}}
     const hl=topc(p.R.rows,r=>r.lado);p.ladoFin=p.lado||(hl[0]?hl[0][0]:'');p.ladoSrc=p.lado?'informado':(hl[0]?'histórico':'');
     if(isPapelBandeja(p)&&!p.fb){p.fb=GUIL;p.fbSel=GUIL;p.cands=[GUIL];p.cadTop=null;}
-    p.cxo=cxOf(p.cod);p.nxMan=null;ITEMS.push(p);});
+    p.cxo=cxOf(p.cod);p.nxMan=null;
+    const pe=p.ped?{ped:p.ped,ent:p.ent,unid:p.unid}:null;
+    const ex=pe&&ITEMS.find(x=>x.cod===p.cod&&x.fb===p.fb&&x.peds&&x.peds.length&&(!p.lado||x.ladoFin===p.ladoFin));
+    if(ex){ex.peds.push(pe);ex.unid=(ex.unid||0)+(p.unid||0);if(ex.qtd!=null&&p.qtd!=null)ex.qtd+=p.qtd;return;}
+    p.peds=pe?[pe]:[];ITEMS.push(p);});
   applyRoles();render(errs);
 }
 function applyRoles(){
@@ -643,7 +630,8 @@ function render(errs){
     let saved='';try{saved=localStorage.getItem('bm-cx2-'+fb)||''}catch(e){}
     const caixa=saved||(cxs.length?cxs.join(' / '):(embH[0]?embH[0][0]:'A confirmar'));
     const line=i=>{const l=[`${i.unidOut!=null?fmt(i.unidOut):'[qtd]'}Unid - ${i.cod} ${i.nome}= ${i.nx?i.nx+'x':'[Nx]'}`];
-      const extra=[i.ped?`Ped. ${i.ped}`:'',i.note].filter(Boolean).join(' – ');if(extra)l.push(extra);l.push('');return l;};
+      if(i.peds&&i.peds.length){i.peds.forEach(p=>l.push(`--Ped.${p.ped}    Entrega ${p.ent||'__/__'}    ${p.unid!=null?fmt(p.unid):'[qtd]'}Unid`));if(i.note)l.push(i.note);}
+      else{const extra=[i.ped?`Ped. ${i.ped}`:'',i.note].filter(Boolean).join(' – ');if(extra)l.push(extra);}l.push('');return l;};
     const body=(hasAp?[...mains.flatMap(line),'**** APROVEITAMENTOS','',...aps.flatMap(line)]:its.flatMap(line));
     const somaNx=its.reduce((s,i)=>s+(i.nx||0),0);
     its.forEach(i=>i._g={fb,M,papel,cores:cores.join(' / '),lado:lados.join(' / '),caixa,folhas,grupo:its.map(x=>({cod:x.cod,nx:x.nx,aprov:!!x.aprov}))});
@@ -781,6 +769,7 @@ document.getElementById('mmclr').onclick=()=>{document.getElementById('mmtxt').v
 document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))montar();});
 document.getElementById('mmtxt').value=EX;montar();
 renderNovos();
+
 </script>
 <script>/** @license
  *
