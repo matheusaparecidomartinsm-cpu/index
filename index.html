@@ -163,6 +163,7 @@ label.chk.novo{white-space:nowrap}
 .eqlog{margin:14px 0 0;font-size:13.5px}
 
 input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink)}
+.txbox{background:#FFFF00;color:#000;font:bold 8pt Tahoma,Verdana,sans-serif;padding:8px 10px;border-radius:4px;white-space:pre-wrap;margin-top:12px}
 .btn.mini{padding:3px 10px;font-size:12px}
 .ofbrow{display:flex;gap:4px;margin-top:4px}
 .expbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:16px}
@@ -178,6 +179,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="mm" aria-selected="true">Montar material</button>
+    <button role="tab" data-tab="txt" aria-selected="false">Texto de O.S.</button>
     <button role="tab" data-tab="os" aria-selected="false">Montagens por O.S.</button>
     <button role="tab" data-tab="fb" aria-selected="false">FBs</button>
     <button role="tab" data-tab="regras" aria-selected="false">Regras e divergências</button>
@@ -208,6 +210,15 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
       </div>
     </div>
     <div id="mmout"></div>
+  </section>
+  <section id="tab-txt" hidden>
+    <div class="mm-in">
+      <label for="txin" class="mm-lbl">Cole as linhas dos pedidos</label>
+      <p class="sub mm-help">Formato: <span class="mono">FB código nome caixas Nx 0 lado pedido [dd/mm]</span>. A data de entrega no fim é opcional. As caixas são multiplicadas pelo C/N do nome, e as folhas saem de unidades ÷ Nx.</p>
+      <textarea id="txin" rows="6" spellcheck="false" placeholder="FB-0476 2302.7569 EMBALAGEM HAMBURGUER COLADO P STEERS CX C/100 32 4 0 Branco 1517130 20/11"></textarea>
+      <div class="controls"><button class="btn pri" id="txgo">Gerar texto</button><button class="btn" id="txcp" hidden>Copiar</button><span class="src" id="txmsg"></span></div>
+    </div>
+    <div id="txout"></div>
   </section>
   <section id="tab-os" hidden><div class="count" id="cnt"></div><div id="list"></div><button class="more" id="more" hidden>Mostrar mais</button></section>
   <section id="tab-fb" hidden><div class="count" id="cntfb"></div><div class="fbgrid" id="fblist"></div><button class="more" id="morefb" hidden>Mostrar mais</button></section>
@@ -355,7 +366,7 @@ function runfb(){const q=norm(document.getElementById('qfb').value).split(/\s+/)
   document.getElementById('cntfb').textContent=`${fres.length} FB${fres.length===1?'':'s'}, ordenadas pela quantidade de O.S.; as sem O.S. vêm do cadastro de facas`;}
 function morefb(){const n=fres.slice(fshown,fshown+30);document.getElementById('fblist').insertAdjacentHTML('beforeend',n.map(fbcard).join(''));fshown+=n.length;document.getElementById('morefb').hidden=fshown>=fres.length;}
 function tab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
-  ['mm','os','fb','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
+  ['mm','txt','os','fb','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
   document.getElementById('ctl-os').hidden=t!=='os';document.getElementById('ctl-fb').hidden=t!=='fb';
   try{localStorage.setItem('bm-tab2',t)}catch(e){}}
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
@@ -364,6 +375,26 @@ let tm;['q','qfb'].forEach(id=>document.getElementById(id).addEventListener('inp
 document.getElementById('more').onclick=more;document.getElementById('morefb').onclick=morefb;
 document.getElementById('fblist').addEventListener('click',e=>{const b=e.target.closest('.linkos');if(!b)return;document.getElementById('q').value=b.dataset.os;tab('os');run();window.scrollTo(0,0)});
 run();runfb();
+
+// ===== Texto de O.S. =====
+(function(){
+const fmt=n=>n.toLocaleString('pt-BR');
+const RX=/^\s*(FB[-\s]?\d+)?\s*(\d{3,5}\.\d+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-zÀ-ú]+)\s+(\d+)(?:\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?))?\s*$/;
+function gerar(){const ls=document.getElementById('txin').value.split('\n').filter(l=>l.trim());const bad=[];const g=new Map();
+  for(const l of ls){const m=l.replace(/\t/g,' ').match(RX);if(!m){bad.push(l.trim());continue}
+    const [,fb,cod,nome,cx,nx,,lado,ped,ent]=m;const cn=(nome.match(/C\/\s*(\d[\d.]*)/i)||[])[1];const mult=cn?+cn.replace(/\./g,''):1;
+    const k=(fb||'')+'|'+cod+'|'+nx;if(!g.has(k))g.set(k,{fb,cod,nome:nome.trim(),nx:+nx,lado,peds:[]});
+    g.get(k).peds.push({ped,ent:ent||'__/__',un:+cx*mult})}
+  const out=[...g.values()].map(x=>{const tot=x.peds.reduce((s,p)=>s+p.un,0);const fl=Math.ceil(tot/x.nx);
+    return [`Imprimir ${fmt(fl)} Folhas`,`${fmt(tot)}Unid - ${x.cod} ${x.nome}= ${x.nx}x`,...x.peds.map(p=>`--Ped.${p.ped}    Entrega ${p.ent}    ${fmt(p.un)}Unid`)].join('\n')});
+  const txt=out.join('\n\n');window._txt=txt;
+  document.getElementById('txout').innerHTML=txt?`<pre class="txbox">${esc(txt)}</pre>`:'';
+  document.getElementById('txcp').hidden=!txt;
+  document.getElementById('txmsg').textContent=bad.length?`${bad.length} linha(s) não reconhecida(s): ${bad.join(' | ')}`:'';}
+document.getElementById('txgo').onclick=gerar;
+document.getElementById('txin').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))gerar()});
+document.getElementById('txcp').onclick=()=>{navigator.clipboard.writeText(window._txt||'').then(()=>{document.getElementById('txmsg').textContent='Copiado.'})};
+})();
 // ===== Montar material =====
 const byCode={},byModel={};
 OS.forEach(o=>{const pa=o.papel[0]||{};o.monts.forEach(m=>m.itens.forEach(i=>{
@@ -1216,6 +1247,3 @@ https://github.com/nodeca/pako/blob/main/LICENSE
  */function n(e){return e>=65&&e<=90||95===e||e>=97&&e<=122||e>=192&&e<=214||e>=216&&e<=246||e>=248&&e<=767||e>=880&&e<=893||e>=895&&e<=8191||e>=8204&&e<=8205||e>=8304&&e<=8591||e>=11264&&e<=12271||e>=12289&&e<=55295||e>=63744&&e<=64975||e>=65008&&e<=65533||e>=65536&&e<=983039}Object.defineProperty(r,"__esModule",{value:!0}),r.NC_NAME_START_CHAR="A-Z_a-z\xc0-\xd6\xd8-\xf6\xf8-\u02ff\u0370-\u037d\u037f-\u1fff\u200c-\u200d\u2070-\u218f\u2c00-\u2fef\u3001-\ud7ff\uf900-\ufdcf\ufdf0-\ufffd\ud800\udc00-\udb7f\udfff",r.NC_NAME_CHAR="-"+r.NC_NAME_START_CHAR+".0-9\xb7\u0300-\u036f\u203f-\u2040",r.NC_NAME_START_CHAR_RE=new RegExp("^["+r.NC_NAME_START_CHAR+"]$","u"),r.NC_NAME_CHAR_RE=new RegExp("^["+r.NC_NAME_CHAR+"]$","u"),r.NC_NAME_RE=new RegExp("^["+r.NC_NAME_START_CHAR+"]["+r.NC_NAME_CHAR+"]*$","u"),r.isNCNameStartChar=n,r.isNCNameChar=function(e){return n(e)||45===e||46===e||e>=48&&e<=57||183===e||e>=768&&e<=879||e>=8255&&e<=8256}},{}]},{},[15])(15)}));
 //# sourceMappingURL=exceljs.min.js.map</script>
 
-
-</body>
-</html>
