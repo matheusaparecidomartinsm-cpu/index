@@ -676,7 +676,7 @@ function render(errs){
      </div></details>`;
     PARTS.push({fb,mlab,M,lo,folhas,body,papel,cores,lados,caixa,eqBtn,conf});
   });
-  html+=`<div class="expbar"><span class="src">Exportar o material:</span><button class="btn" data-exp="xlsx">Planilha (.xlsx)</button><button class="btn" data-exp="pdf">PDF</button><span class="src" id="expmsg"></span></div>`;
+  html+=`<div class="expbar"><span class="src">Exportar o material:</span><button class="btn" data-exp="xlsx">Planilha (.xlsx)</button><button class="btn" data-exp="pdf">PDF</button><button class="btn pri" data-exp="gs">Enviar p/ Google Sheets</button><button class="btn mini" data-exp="gsurl" title="Configurar o link do script">⚙</button><span class="src" id="expmsg"></span></div>`;
   const BYFB=[];PARTS.forEach(p=>{let g=BYFB.find(x=>x.fb===p.fb);if(!g){g={fb:p.fb,parts:[]};BYFB.push(g);}g.parts.push(p);});
   BYFB.forEach(({fb,parts},gi)=>{const p0=parts[0];const multi=parts.length>1;
     const nome=(multi?parts.flatMap(p=>[`${p.mlab}= ${p.folhas?fmt(p.folhas):'[folhas]'} Folhas`,'',...p.body,'']):[`Imprimir ${p0.folhas?fmt(p0.folhas):'[folhas]'} Folhas`,'',...p0.body]).join('\n').trim();
@@ -732,7 +732,7 @@ mmout.addEventListener('click',async e=>{
     try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=fb;localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     const md=it.cod.split('.')[0];ITEMS.forEach(o=>{if(o!==it&&!o.fb&&!o.aprov&&o.cands.length>1&&o.cod.split('.')[0]===md&&o.cands.includes(fb)){o.fb=fb;o.fbSel=fb;}});
     ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
-  const ex=e.target.closest('[data-exp]');if(ex){exportMat(ex.dataset.exp);return;}
+  const ex=e.target.closest('[data-exp]');if(ex){if(ex.dataset.exp==='gs'||ex.dataset.exp==='gsurl'){sendGS(ex.dataset.exp==='gsurl');return;}exportMat(ex.dataset.exp);return;}
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
   const b=e.target.closest('[data-copy]');if(!b)return;const g=b.dataset.copy;ITEMS.forEach(i=>{if(NOVOS[i.cod]&&i._g)saveNovo(i);});const tb=document.getElementById('xt'+g);const msg=document.getElementById('cpmsg'+g);
   const cells=[...tb.querySelectorAll('td')].map(td=>td.innerText.trim());
@@ -769,6 +769,14 @@ document.getElementById('mmclr').onclick=()=>{document.getElementById('mmtxt').v
 document.getElementById('mmtxt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))montar();});
 document.getElementById('mmtxt').value=EX;montar();
 renderNovos();
+
+async function sendGS(cfg){const msg=document.getElementById('expmsg');let url='';try{url=localStorage.getItem('bm-gsurl')||''}catch(e){}
+  if(cfg||!url){const u=prompt('Cole o link do Apps Script (termina em /exec):',url);if(!u)return;url=u.trim();try{localStorage.setItem('bm-gsurl',url)}catch(e){}if(cfg){msg.textContent='Link salvo.';return;}}
+  const {rows}=matRows();if(!rows.length){msg.textContent='Monte o material primeiro.';return;}
+  msg.textContent='Enviando…';
+  try{await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({rows})});
+    msg.textContent=`Enviado: ${rows.length} montagem(ns) para a aba "export montagem claude".`;}
+  catch(e){msg.textContent='Não consegui enviar ('+e.message+'). Abra a biblioteca pelo site (GitHub/Vercel) ou confira o link no ⚙.';}}
 
 </script>
 <script>/** @license
