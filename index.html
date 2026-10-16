@@ -179,7 +179,6 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="mm" aria-selected="true">Montar material</button>
-    <button role="tab" data-tab="txt" aria-selected="false">Texto de O.S.</button>
     <button role="tab" data-tab="os" aria-selected="false">Montagens por O.S.</button>
     <button role="tab" data-tab="fb" aria-selected="false">FBs</button>
     <button role="tab" data-tab="regras" aria-selected="false">Regras e divergências</button>
@@ -209,16 +208,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
         <button class="btn" id="mmclr">Limpar</button>
       </div>
     </div>
-    <div id="mmout"></div>
-  </section>
-  <section id="tab-txt" hidden>
-    <div class="mm-in">
-      <label for="txin" class="mm-lbl">Cole as linhas dos pedidos</label>
-      <p class="sub mm-help">Formato: <span class="mono">FB código nome caixas Nx 0 lado pedido [dd/mm]</span>. A data de entrega no fim é opcional. As caixas são multiplicadas pelo C/N do nome, e as folhas saem de unidades ÷ Nx.</p>
-      <textarea id="txin" rows="6" spellcheck="false" placeholder="FB-0476 2302.7569 EMBALAGEM HAMBURGUER COLADO P STEERS CX C/100 32 4 0 Branco 1517130 20/11"></textarea>
-      <div class="controls"><button class="btn pri" id="txgo">Gerar texto</button><button class="btn" id="txcp" hidden>Copiar</button><span class="src" id="txmsg"></span></div>
-    </div>
-    <div id="txout"></div>
+    <div class="controls" id="txbar" hidden><button class="btn" id="txcp">Copiar texto</button><span class="src" id="txmsg"></span></div><div id="txout"></div><div id="mmout"></div>
   </section>
   <section id="tab-os" hidden><div class="count" id="cnt"></div><div id="list"></div><button class="more" id="more" hidden>Mostrar mais</button></section>
   <section id="tab-fb" hidden><div class="count" id="cntfb"></div><div class="fbgrid" id="fblist"></div><button class="more" id="morefb" hidden>Mostrar mais</button></section>
@@ -366,7 +356,7 @@ function runfb(){const q=norm(document.getElementById('qfb').value).split(/\s+/)
   document.getElementById('cntfb').textContent=`${fres.length} FB${fres.length===1?'':'s'}, ordenadas pela quantidade de O.S.; as sem O.S. vêm do cadastro de facas`;}
 function morefb(){const n=fres.slice(fshown,fshown+30);document.getElementById('fblist').insertAdjacentHTML('beforeend',n.map(fbcard).join(''));fshown+=n.length;document.getElementById('morefb').hidden=fshown>=fres.length;}
 function tab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
-  ['mm','txt','os','fb','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
+  ['mm','os','fb','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
   document.getElementById('ctl-os').hidden=t!=='os';document.getElementById('ctl-fb').hidden=t!=='fb';
   try{localStorage.setItem('bm-tab2',t)}catch(e){}}
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
@@ -376,23 +366,23 @@ document.getElementById('more').onclick=more;document.getElementById('morefb').o
 document.getElementById('fblist').addEventListener('click',e=>{const b=e.target.closest('.linkos');if(!b)return;document.getElementById('q').value=b.dataset.os;tab('os');run();window.scrollTo(0,0)});
 run();runfb();
 
-// ===== Texto de O.S. =====
+// ===== Texto de O.S. (linhas de pedido coladas em Montar material) =====
 (function(){
 const fmt=n=>n.toLocaleString('pt-BR');
 const RX=/^\s*(FB[-\s]?\d+)?\s*(\d{3,5}\.\d+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-zÀ-ú]+)\s+(\d+)(?:\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?))?\s*$/;
-function gerar(){const ls=document.getElementById('txin').value.split('\n').filter(l=>l.trim());const bad=[];const g=new Map();
-  for(const l of ls){const m=l.replace(/\t/g,' ').match(RX);if(!m){bad.push(l.trim());continue}
-    const [,fb,cod,nome,cx,nx,,lado,ped,ent]=m;const cn=(nome.match(/C\/\s*(\d[\d.]*)/i)||[])[1];const mult=cn?+cn.replace(/\./g,''):1;
-    const k=(fb||'')+'|'+cod+'|'+nx;if(!g.has(k))g.set(k,{fb,cod,nome:nome.trim(),nx:+nx,lado,peds:[]});
+const lines=()=>document.getElementById('mmtxt').value.split('\n').filter(l=>l.trim()).map(l=>l.replace(/\t/g,' '));
+function isPed(){const ls=lines();return ls.length&&ls.every(l=>RX.test(l))}
+function clear(){document.getElementById('txout').innerHTML='';document.getElementById('txbar').hidden=true}
+function gerar(){const g=new Map();
+  for(const l of lines()){const [,fb,cod,nome,cx,nx,,lado,ped,ent]=l.match(RX);const cn=(nome.match(/C\/\s*(\d[\d.]*)/i)||[])[1];const mult=cn?+cn.replace(/\./g,''):1;
+    const k=(fb||'')+'|'+cod+'|'+nx;if(!g.has(k))g.set(k,{cod,nome:nome.trim(),nx:+nx,peds:[]});
     g.get(k).peds.push({ped,ent:ent||'__/__',un:+cx*mult})}
-  const out=[...g.values()].map(x=>{const tot=x.peds.reduce((s,p)=>s+p.un,0);const fl=Math.ceil(tot/x.nx);
-    return [`Imprimir ${fmt(fl)} Folhas`,`${fmt(tot)}Unid - ${x.cod} ${x.nome}= ${x.nx}x`,...x.peds.map(p=>`--Ped.${p.ped}    Entrega ${p.ent}    ${fmt(p.un)}Unid`)].join('\n')});
-  const txt=out.join('\n\n');window._txt=txt;
-  document.getElementById('txout').innerHTML=txt?`<pre class="txbox">${esc(txt)}</pre>`:'';
-  document.getElementById('txcp').hidden=!txt;
-  document.getElementById('txmsg').textContent=bad.length?`${bad.length} linha(s) não reconhecida(s): ${bad.join(' | ')}`:'';}
-document.getElementById('txgo').onclick=gerar;
-document.getElementById('txin').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))gerar()});
+  const txt=[...g.values()].map(x=>{const tot=x.peds.reduce((s,p)=>s+p.un,0);
+    return [`Imprimir ${fmt(Math.ceil(tot/x.nx))} Folhas`,`${fmt(tot)}Unid - ${x.cod} ${x.nome}= ${x.nx}x`,...x.peds.map(p=>`--Ped.${p.ped}    Entrega ${p.ent}    ${fmt(p.un)}Unid`)].join('\n')}).join('\n\n');
+  window._txt=txt;document.getElementById('mmout').innerHTML='';
+  document.getElementById('txout').innerHTML=`<pre class="txbox">${esc(txt)}</pre>`;document.getElementById('txbar').hidden=false;document.getElementById('txmsg').textContent='';}
+document.addEventListener('click',e=>{if(e.target.closest('#mmgo')){if(isPed()){e.stopPropagation();e.preventDefault();gerar()}else clear()}},true);
+document.addEventListener('keydown',e=>{if(e.target.id==='mmtxt'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){if(isPed()){e.stopPropagation();e.preventDefault();gerar()}else clear()}},true);
 document.getElementById('txcp').onclick=()=>{navigator.clipboard.writeText(window._txt||'').then(()=>{document.getElementById('txmsg').textContent='Copiado.'})};
 })();
 // ===== Montar material =====
