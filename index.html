@@ -483,6 +483,7 @@ function montar(){
     const ex=pe&&ITEMS.find(x=>x.cod===p.cod&&x.fb===p.fb&&x.peds&&x.peds.length&&(!p.lado||x.ladoFin===p.ladoFin));
     if(ex){ex.peds.push(pe);ex.unid=(ex.unid||0)+(p.unid||0);if(ex.qtd!=null&&p.qtd!=null)ex.qtd+=p.qtd;return;}
     p.peds=pe?[pe]:[];ITEMS.push(p);});
+  {const fo=[];ITEMS.forEach(i=>{const f=i.cod.split('.')[0];if(!fo.includes(f))fo.push(f)});ITEMS.sort((a,b)=>fo.indexOf(a.cod.split('.')[0])-fo.indexOf(b.cod.split('.')[0]));}
   applyRoles();render(errs);
 }
 function applyRoles(){
@@ -607,6 +608,9 @@ function render(errs){
   const mlist=[];Object.entries(groups).forEach(([fb,its])=>{const M=getM(fb);
     if(its.some(i=>i.mont)){const by={};its.forEach(i=>{const m=i.mont||1;(by[m]=by[m]||[]).push(i);});const ks=Object.keys(by).map(Number).sort((x,y)=>x-y);
       ks.forEach((m,k)=>mlist.push([fb,by[m],`Montagem ${String(k+1).padStart(2,'0')}`,true]));}
+    else if(new Set(its.filter(i=>!i.aprov).map(i=>i.cod.split('.')[0])).size>1){const by=new Map(),aps=its.filter(i=>i.aprov);
+      its.filter(i=>!i.aprov).forEach(i=>{const f=i.cod.split('.')[0];if(!by.has(f))by.set(f,[]);by.get(f).push(i);});
+      [...by.values()].forEach((l,k)=>mlist.push([fb,k===0?l.concat(aps):l,`Montagem ${String(k+1).padStart(2,'0')}`,false]));}
     else if(M&&its.length>M){const ord=[...its].sort((a,b)=>(a.aprov-b.aprov)||((b.unid||0)-(a.unid||0)));const n=Math.ceil(ord.length/M);
       for(let k=0;k<n;k++)mlist.push([fb,ord.slice(k*M,(k+1)*M),`Montagem ${String(k+1).padStart(2,'0')}`,false]);}
     else mlist.push([fb,its,'',false]);});
