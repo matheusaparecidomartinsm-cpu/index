@@ -396,7 +396,8 @@ function renderNovos(){const el=document.getElementById('novoslist');if(!el)retu
 let CUSTOM_M={};try{CUSTOM_M=JSON.parse(localStorage.getItem('bm-moldes')||'{}')}catch(e){}
 const GUIL='GUILHOTINA';let GUIL_M=null;
 const isPapelBandeja=i=>/PAPEL\s+(DE\s+)?BANDEJA/i.test(i.nome||'');
-const fbLabel=fb=>fb===GUIL?'Corte Guilhotina':'FB '+fb;
+const isNova=fb=>String(fb).startsWith('NOVA-');
+const fbLabel=fb=>fb===GUIL?'Corte Guilhotina':isNova(fb)?'Faca Nova':'FB '+fb;
 function getM(fb){if(CUSTOM_M[fb])return Number(CUSTOM_M[fb]);if(fb===GUIL)return GUIL_M;const F=FBI[fb];return F&&F.moldes[0]?Number(F.moldes[0][0]):null;}
 function setM(fb,n){if(n>0)CUSTOM_M[fb]=n;else delete CUSTOM_M[fb];try{localStorage.setItem('bm-moldes',JSON.stringify(CUSTOM_M))}catch(e){}}
 function normFB(x){const d=String(x||'').replace(/\D/g,'');return d?d.padStart(4,'0'):'';}
@@ -600,7 +601,7 @@ function render(errs){
       return `<div class="askitem"><div><span class="mono">${esc(i.cod)}</span> ${esc(i.nome)}</div><div class="askopts">${i.cands.map(fb=>{const inf=fbInfo(i,fb);
         return `<button class="btn askbtn" data-pick="${idx}" data-pfb="${esc(fb)}"><b>FB ${esc(fb)}</b><span>${esc(inf)}</span>${fb===last?'<em>última escolha</em>':''}</button>`}).join('')}
         ${combos(i).map(c=>`<button class="btn askbtn duo" data-pick="${idx}" data-pfb="${esc(c.fbs.join('+'))}"><b>FB ${esc(c.fbs.join(' + '))}</b><span>usadas juntas na mesma O.S. (${c.os.length}x) (última ${Math.max(...c.os)})</span>${c.fbs.join('+')===last?'<em>última escolha</em>':''}</button>`).join('')}</div>
-        <div class="askmulti"><span class="src">Outra FB:</span><input class="ofb" id="ofb${idx}" placeholder="ex.: 2486" aria-label="Outra FB para ${esc(i.cod)}"><input class="ofb" id="omd${idx}" type="number" min="1" placeholder="moldes" aria-label="Moldes da outra FB"><button class="btn" data-other="${idx}">Usar esta FB</button></div>
+        <div class="askmulti"><span class="src">Outra FB:</span><input class="ofb" id="ofb${idx}" placeholder="ex.: 2486" aria-label="Outra FB para ${esc(i.cod)}"><input class="ofb" id="omd${idx}" type="number" min="1" placeholder="moldes" aria-label="Moldes da outra FB"><button class="btn" data-other="${idx}">Usar esta FB</button><span class="src">ou</span><button class="btn" data-nova="${idx}" title="Use os moldes digitados ao lado">Faca Nova</button></div>
         <div class="askmulti"><span class="src">Usar mais de uma FB:</span>${i.cands.map(fb=>`<label class="chk"><input type="checkbox" data-mfb="${idx}" value="${esc(fb)}"> ${esc(fb)}</label>`).join('')}<button class="btn" data-msplit="${idx}">Dividir entre as marcadas</button></div></div>`}).join('')}
     </div>`;
     box.innerHTML=html;return;
@@ -618,7 +619,7 @@ function render(errs){
   mlist.forEach(([fb,its,mlab,manual],mi)=>{
     const M=getM(fb);
     const lo=fb!=='?'?lastOSofFB(fb):null;
-    const papel=(()=>{const c=topc(its.flatMap(i=>(fb===GUIL?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
+    const papel=(()=>{const c=topc(its.flatMap(i=>((fb===GUIL||isNova(fb))?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.papel);if(c[0])return c[0][0];if(lo&&lo.papel[0])return `${lo.papel[0].nome} ${lo.papel[0].gram}g`;return 'A confirmar';})();
     const mains=its.filter(i=>!i.aprov),aps=its.filter(i=>i.aprov);const hasAp=mains.length&&aps.length;
     if(hasAp&&M&&M%2===0){const h=M/2;const w=a=>a.map(i=>Object.assign(Object.create(i),{unid:i.unid||1}));
       const n1=distribute(w(mains),h),n2=distribute(w(aps),h);mains.forEach((it,k)=>it.nx=it.nxMan||n1[k]);aps.forEach((it,k)=>it.nx=it.nxMan||n2[k]);}
@@ -628,7 +629,7 @@ function render(errs){
     its.forEach(i=>i.unidOut=(hasAp&&i.aprov)?(folhas&&i.nx?folhas*i.nx:null):i.unid);
     const cores=[...new Set(its.map(i=>i.cores).filter(Boolean))];
     const lados=[...new Set(its.map(i=>i.ladoFin).filter(Boolean))];
-    const embH=topc(its.flatMap(i=>(fb===GUIL?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.emb);
+    const embH=topc(its.flatMap(i=>((fb===GUIL||isNova(fb))?i.R.rows:i.R.rows.filter(r=>r.fb===fb))),r=>r.emb);
     its.forEach(i=>i.cxo=cxOf(i.cod));
     const cxs=[...new Set(its.map(i=>i.cxo&&i.cxo.cx).filter(Boolean))];
     let saved='';try{saved=localStorage.getItem('bm-cx2-'+fb)||''}catch(e){}
@@ -668,7 +669,7 @@ function render(errs){
       <div class="tbl"><table><thead><tr><th>Código</th><th>FB</th><th class="r">Unid</th><th class="r">Nx</th><th class="r">Produz</th><th>Lado</th><th>Caixa</th><th>Referência usada</th></tr></thead><tbody>
       ${its.map(i=>{const idx=ITEMS.indexOf(i);const last=i.R.rows.find(r=>r.fb===i.fbSel)||i.R.rows[0];const prod=folhas&&i.nx?folhas*i.nx:null;
         return `<tr><td class="mono">${esc(i.cod)}${i.aprov?' <span class="chip ap">aprov.</span>':''}${i.byName?`<div class="src">achado pelo nome</div>${i.matches.length>1?`<select data-alt="${idx}" aria-label="Outros produtos parecidos">${i.matches.map(m=>`<option value="${esc(m.c)}"${m.c===i.cod?' selected':''}>${esc(m.c)} ${esc(m.n)}${m.last?' · últ. O.S. '+m.last:' · sem O.S.'}</option>`).join('')}</select>`:''}`:''}</td>
-        <td><select data-fb="${idx}">${[...new Set([i.fbSel,...i.cands].filter(Boolean))].map(f=>`<option${f===i.fbSel?' selected':''}>${esc(f)}</option>`).join('')||'<option>?</option>'}</select><div class="ofbrow"><input class="ofb" id="cfb${idx}" placeholder="outra FB" aria-label="Outra FB para ${esc(i.cod)}"><button class="btn mini" data-other="${idx}" data-c="1">usar</button></div></td>
+        <td><select data-fb="${idx}">${[...new Set([i.fbSel,...i.cands].filter(Boolean))].map(f=>`<option value="${esc(f)}"${f===i.fbSel?' selected':''}>${esc(isNova(f)?'Faca Nova':f)}</option>`).join('')||'<option>?</option>'}</select><div class="ofbrow"><input class="ofb" id="cfb${idx}" placeholder="outra FB" aria-label="Outra FB para ${esc(i.cod)}"><button class="btn mini" data-other="${idx}" data-c="1">usar</button><button class="btn mini" data-nova="${idx}" data-c="1">Faca Nova</button></div></td>
         <td class="r">${i.unid!=null?fmt(i.unid):'—'}</td>
         <td class="r"><input type="number" min="1" value="${i.nx||''}" data-nx="${idx}" aria-label="Nx ${esc(i.cod)}">${i.nxMan?'':'<div class="src">sugerido</div>'}</td>
         <td class="r">${prod?fmt(prod):'—'}${prod&&i.unid?`<div class="src">${i.nx?fmt(Math.ceil(i.unid/i.nx))+' fls · ':''}sobra ${fmt(prod-i.unid)}</div>`:''}</td>
@@ -722,6 +723,10 @@ mmout.addEventListener('click',async e=>{
     if(sel.length<2){ms.insertAdjacentHTML('afterend','<span class="warnln"> Marque pelo menos 2 FBs.</span>');return;}
     const it=ITEMS[idx];try{const m=JSON.parse(localStorage.getItem('bm-fbpick')||'{}');m[it.cod]=sel.join('+');localStorage.setItem('bm-fbpick',JSON.stringify(m))}catch(x){}
     splitItem(it,sel);ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
+  const nv=e.target.closest('[data-nova]');if(nv){const idx=nv.dataset.nova;const it=ITEMS[idx];const fb='NOVA-'+it.cod.split('.')[0];
+    let n=Number((document.getElementById('omd'+idx)||{}).value)||0;if(!n&&!getM(fb)){n=Number(prompt('Faca Nova: quantas montagens (moldes) por folha?','')||0);if(!n)return;}
+    if(n)setM(fb,n);it.fb=fb;it.fbSel=fb;if(!it.cands.includes(fb))it.cands=[fb,...it.cands];
+    ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
   const ot=e.target.closest('[data-other]');if(ot){const idx=ot.dataset.other;const it=ITEMS[idx];
     const fb=normFB(document.getElementById((ot.dataset.c?'cfb':'ofb')+idx).value);if(!fb){ot.insertAdjacentHTML('afterend','<span class="warnln"> Digite o número da FB.</span>');return;}
     const md=document.getElementById('omd'+idx);if(md&&Number(md.value)>0)setM(fb,Number(md.value));
