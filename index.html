@@ -468,6 +468,7 @@ function pickCommon(list){const free=(list||ITEMS).filter(i=>!i.fb);if(free.leng
   if(!common.length)return;const sc=f=>Math.max(...free.map(i=>i.R.rows.filter(r=>r.fb===f).reduce((m,r)=>Math.max(m,(r.ap?0:1e6)+r.os),0)));
   common.sort((a,b)=>sc(b)-sc(a));free.forEach(i=>i.fbSel=common[0]);}
 
+let OCS={};document.addEventListener('change',e=>{const c=e.target.closest&&e.target.closest('.ocin');if(!c)return;const v=c.value.trim();if(v)OCS[c.dataset.ock]=v;else delete OCS[c.dataset.ock];render([]);});
 let ITEMS=[];const OPENCONF=new Set();
 function montar(){
   const un=document.getElementById('mmun').checked;
@@ -684,13 +685,14 @@ function render(errs){
   html+=`<div class="expbar"><span class="src">Exportar o material:</span><button class="btn" data-exp="xlsx">Planilha (.xlsx)</button><button class="btn" data-exp="pdf">PDF</button><button class="btn pri" data-exp="gs">Enviar p/ Google Sheets</button><button class="btn mini" data-exp="gsurl" title="Configurar o link do script">⚙</button><span class="src" id="expmsg"></span></div>`;
   const BYFB=[];PARTS.forEach(p=>{let g=BYFB.find(x=>x.fb===p.fb);if(!g){g={fb:p.fb,parts:[]};BYFB.push(g);}g.parts.push(p);});
   BYFB.forEach(({fb,parts},gi)=>{const p0=parts[0];const multi=parts.length>1;
-    const nome=(multi?parts.flatMap(p=>[`${p.mlab}= ${p.folhas?fmt(p.folhas):'[folhas]'} Folhas`,'',...p.body,'']):[`Imprimir ${p0.folhas?fmt(p0.folhas):'[folhas]'} Folhas`,'',...p0.body]).join('\n').trim();
+    const ocK=p=>p.fb+'|'+(p.mlab||'');const ocL=p=>OCS[ocK(p)]?['--OC: '+OCS[ocK(p)]]:[];
+    const nome=(multi?parts.flatMap(p=>[`${p.mlab}= ${p.folhas?fmt(p.folhas):'[folhas]'} Folhas`,'',...p.body,...ocL(p),'']):[`Imprimir ${p0.folhas?fmt(p0.folhas):'[folhas]'} Folhas`,'',...p0.body,...ocL(p0)]).join('\n').trim();
     const uniq=a=>[...new Set(a.filter(Boolean))];
     const papel=uniq(parts.map(p=>p.papel)).join(' / ');const cores=uniq(parts.flatMap(p=>p.cores));const lados=uniq(parts.flatMap(p=>p.lados));
     const caixa=uniq(parts.map(p=>p.caixa)).join(' / ');const M=p0.M,lo=p0.lo;
     html+=`<div class="mmgrp" data-g="${gi}">
      <div class="mmbar"><h3>${esc(fbLabel(fb))}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
-      <button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button><button class="btn" data-orc="${gi}">Enviar p/ orçamento</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
+      <span class="ocbox">${parts.map(p=>`<label class="src">OC${multi?' '+esc(p.mlab):''}: <input class="ofb ocin" data-ock="${esc(ocK(p))}" value="${esc(OCS[ocK(p)]||'')}" placeholder="nº da OC" aria-label="Ordem de compra ${esc(p.mlab||'')}"></label>`).join(' ')}</span><button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button><button class="btn" data-orc="${gi}">Enviar p/ orçamento</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">${esc(fbLabel(fb))}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
      ${parts.map(p=>p.conf).join('')}</div>`;
