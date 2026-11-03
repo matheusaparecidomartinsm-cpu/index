@@ -468,6 +468,8 @@ function pickCommon(list){const free=(list||ITEMS).filter(i=>!i.fb);if(free.leng
   if(!common.length)return;const sc=f=>Math.max(...free.map(i=>i.R.rows.filter(r=>r.fb===f).reduce((m,r)=>Math.max(m,(r.ap?0:1e6)+r.os),0)));
   common.sort((a,b)=>sc(b)-sc(a));free.forEach(i=>i.fbSel=common[0]);}
 
+const FRANQ=/CLAUDI[AÃ]O|CAMARADA\s+CAMAR|COCO\s*BAMBU|THE\s+BEST|\bTBS\b|\bTT\s*BURGER|DOG\s*KING|GREEN\s*JOY|HORA\s+DO\s+PASTEL|\bJAH\b|MR\.?\s*FRITZ|NANICA|\bOGGI\b|PANTANAL/i;
+const isFranq=n=>FRANQ.test(String(n||''));
 let OCS={};document.addEventListener('change',e=>{const c=e.target.closest&&e.target.closest('.ocin');if(!c)return;const v=c.value.trim();if(v)OCS[c.dataset.ock]=v;else delete OCS[c.dataset.ock];render([]);});
 let ITEMS=[];const OPENCONF=new Set();
 function montar(){
@@ -637,6 +639,7 @@ function render(errs){
     const caixa=saved||(cxs.length?cxs.join(' / '):(embH[0]?embH[0][0]:'A confirmar'));
     const line=i=>{const l=[`${i.unidOut!=null?fmt(i.unidOut):'[qtd]'}Unid - ${i.cod} ${i.nome}= ${i.nx?i.nx+'x':'[Nx]'}`];
       if(i.peds&&i.peds.length){i.peds.forEach(p=>l.push(`--Ped.${p.ped}    Entrega ${p.ent||'__/__'}    ${p.unid!=null?fmt(p.unid):'[qtd]'}Unid`));if(i.note)l.push(i.note);}
+      else if(isFranq(i.nome)){l.push('--Ped.Franqueado Liberando para manter estoque');if(i.note)l.push(i.note);}
       else{const extra=[i.ped?`Ped. ${i.ped}`:'',i.note].filter(Boolean).join(' – ');if(extra)l.push(extra);}l.push('');return l;};
     const body=(hasAp?[...mains.flatMap(line),'**** APROVEITAMENTOS','',...aps.flatMap(line)]:its.flatMap(line));
     const somaNx=its.reduce((s,i)=>s+(i.nx||0),0);
