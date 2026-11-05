@@ -468,7 +468,7 @@ function pickCommon(list){const free=(list||ITEMS).filter(i=>!i.fb);if(free.leng
   if(!common.length)return;const sc=f=>Math.max(...free.map(i=>i.R.rows.filter(r=>r.fb===f).reduce((m,r)=>Math.max(m,(r.ap?0:1e6)+r.os),0)));
   common.sort((a,b)=>sc(b)-sc(a));free.forEach(i=>i.fbSel=common[0]);}
 
-const FRANQ=/CLAUDI[AÃ]O|CAMARADA\s+CAMAR|COCO\s*BAMBU|THE\s+BEST|\bTBS\b|\bTT\s*BURGER|DOG\s*KING|GREEN\s*JOY|HORA\s+DO\s+PASTEL|\bJAH\b|MR\.?\s*FRITZ|NANICA|\bOGGI\b|PANTANAL|SODI[EÊ]|BATEL\s*GRILL|[AÁ]GUA\s+DOCE|ESPETTO|\bMAN[EÉ]\b|SEU\s+RUFINO|\bSEVERO\b/i;
+const FRANQ=/CLAUDI[AÃ]O|CAMARADA\s+CAMAR|COCO\s*BAMBU|THE\s+BEST|\bTBS\b|\bTT\s*BURGER|DOG\s*KING|GREEN\s*JOY|HORA\s+DO\s+PASTEL|\bJAH\b|MR\.?\s*FRITZ|NANICA|\bOGGI\b|PANTANAL|SODI[EÊ]|BATEL\s*GRILL|[AÁ]GUA\s+DOCE|ESPETTO|\bMAN[EÉ]\b|SEU\s+RUFINO|\bSEVERO\b|ALEM[AÃ]O/i;
 let PAPSAV={},PAPX=[];try{PAPSAV=JSON.parse(localStorage.getItem('bm-papel')||'{}');PAPX=JSON.parse(localStorage.getItem('bm-papeis')||'[]')}catch(e){}
 const savePap=()=>{try{localStorage.setItem('bm-papel',JSON.stringify(PAPSAV));localStorage.setItem('bm-papeis',JSON.stringify(PAPX))}catch(e){}};
 let PAPL=null;const papList=()=>{if(!PAPL)PAPL=[...new Set(Object.values(byCode).flat().map(r=>r.papel).filter(Boolean))].sort();return [...new Set([...PAPX,...PAPL])];};
