@@ -644,6 +644,7 @@ function render(errs){
     const caixa=saved||(cxs.length?cxs.join(' / '):(embH[0]?embH[0][0]:'A confirmar'));
     const line=i=>{const l=[`${i.unidOut!=null?fmt(i.unidOut):'[qtd]'}Unid - ${i.cod} ${i.nome}= ${i.nx?i.nx+'x':'[Nx]'}`];
       if(i.peds&&i.peds.length){i.peds.forEach(p=>l.push(`--Ped.${p.ped}    Entrega ${p.ent||'__/__'}    ${p.unid!=null?fmt(p.unid):'[qtd]'}Unid`));if(i.note)l.push(i.note);}
+      else if(/BETO\s*CARRE?I?RO/i.test(i.nome||'')){l.push('--Ped. Solicitado pelo David');if(i.note)l.push(i.note);}
       else if(isFranq(i.nome)){l.push('--Ped.Franqueado Liberando para manter estoque');if(i.note)l.push(i.note);}
       else{const extra=[i.ped?`Ped. ${i.ped}`:'',i.note].filter(Boolean).join(' – ');if(extra)l.push(extra);}l.push('');return l;};
     const body=(hasAp?[...mains.flatMap(line),'**** APROVEITAMENTOS','',...aps.flatMap(line)]:its.flatMap(line));
