@@ -164,6 +164,7 @@ label.chk.novo{white-space:nowrap}
 
 input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink)}
 .txbox{background:#FFFF00;color:#000;font:bold 8pt Tahoma,Verdana,sans-serif;padding:8px 10px;border-radius:4px;white-space:pre-wrap;margin-top:12px}
+.eqopts{margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;font-size:13px}.eqop{margin-top:6px}
 .btn.mini{padding:3px 10px;font-size:12px}
 .ofbrow{display:flex;gap:4px;margin-top:4px}
 .expbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:16px}
@@ -552,6 +553,23 @@ async function exportMat(kind,msgId){const msg=document.getElementById(msgId||'e
     }
   }catch(err){msg.textContent='Não consegui gerar o arquivo: '+(err&&err.message||err);}
 }
+
+let EQOPTS={};
+function eqOptions(items){
+  const n=items.length,M=items.reduce((a,i)=>a+i.nx,0),q0=items.map(i=>i.unid),P=items.map(i=>i.mult||1);
+  const comps=[];(function rec(k,left,acc){if(comps.length>3000)return;if(k===n-1){comps.push([...acc,left]);return;}for(let x=1;x<=left-(n-1-k);x++)rec(k+1,left-x,[...acc,x]);})(0,M,[]);
+  if(comps.length>3000||n<2)return [];
+  const tot=q0.reduce((a,b)=>a+b,0),Fc=tot/M,F0=Math.max(1,Math.floor(Fc*0.6)),F1=Math.ceil(Fc*1.6)+2;
+  const found=new Map();
+  for(const nx of comps){for(let F=F0;F<=F1;F++){let cost=0,ok=true;const q=[];
+    for(let k=0;k<n;k++){const p=P[k],lo=(F-1)*nx[k]+1,hi=F*nx[k];let v=Math.ceil(Math.max(lo,q0[k])/p)*p;if(v>hi){v=Math.floor(hi/p)*p;if(v<lo){ok=false;break;}}
+      q.push(v);cost+=v>=q0[k]?(v-q0[k])/p:10*(q0[k]-v)/p;}
+    if(!ok)continue;const key=q.join(',');const prev=found.get(key);if(!prev||cost<prev.cost)found.set(key,{nx:nx.slice(),q,F,cost,q0});}}
+  const all=[...found.values()].sort((a,b)=>a.cost-b.cost||a.F-b.F);
+  const out=[];for(const o of all){if(out.length>=4)break;if(out.some(x=>x.q.every((v,k)=>Math.abs(v-o.q[k])<P[k]*2)&&out.length))continue;out.push(o);}
+  if(!out.length){const r=equalize(items,false);r.nobox=true;out.push(r);}
+  return out;
+}
 function equalize(items,boxMode){
   // para cada nº de folhas F, escolhe os Nx (somando os moldes) que menos mudam as quantidades, preferindo caixas fechadas
   const n=items.length,M=items.reduce((a,i)=>a+i.nx,0),q0=items.map(i=>i.unid),P=items.map(i=>i.mult||1);
@@ -673,6 +691,8 @@ function render(errs){
     if(cores.length>1||lados.length>1)checks.push(['w','Produtos com impressão ou lado diferentes no mesmo grupo. Confira se podem ir juntos.']);
     const eqBtn=unequal?`<button class="btn" data-eq="${esc(fb)}" data-eqi="${its.map(x=>ITEMS.indexOf(x)).join(',')}" title="Muda o mínimo possível as quantidades, fechando caixas quando a diferença é pequena">Igualar folhas${mlab?' · '+esc(mlab):''}</button>`:'';
     const ck=fb+'|'+mlab;
+    let eqOpts='';if(unequal){const ei=its.filter(i=>!(hasAp&&i.aprov)&&i.nx&&i.unid);if(ei.length>1){const ops=eqOptions(ei);EQOPTS[ck]={idx:ei.map(x=>ITEMS.indexOf(x)),ops};
+      eqOpts=`<div class="eqopts"><b>Opções para fechar ${mlab?esc(mlab):'a montagem'} na mesma quantidade de folhas</b>${ops.map((o,j)=>`<div class="eqop"><button class="btn mini" data-eqopt="${esc(ck)}" data-eqj="${j}">Usar</button> <b>${fmt(o.F)} folhas</b>${o.nobox?' (não fecha caixa)':''} · ${ei.map((i,k)=>{const p=i.mult||1;const d=o.q[k]-o.q0[k];return `${esc(i.cod)} ${o.nx[k]}x: ${fmt(o.q[k]/p)} ${i.mult?'cx':'un'}${d?` (${d>0?'+':''}${fmt(d/p)})`:' (igual)'}`}).join(' · ')}</div>`).join('')}</div>`;}}
     const conf=`${(()=>{const nw=checks.filter(c=>c[0]==='w').length;const ok=checks.find(c=>c[0]==='o');const ok2=checks.find(c=>c[0]==='o2');return `<details class="conf" data-conf="${esc(ck)}"${OPENCONF.has(ck)?' open':''}><summary>Conferência${mlab?' · '+esc(mlab):''}${ok?` · <span class="okln">${esc(ok[1].split('.')[0])}</span>`:''}${ok2?` · <span class="okln">${esc(ok2[1].replace(/\.$/,''))}</span>`:''}${nw?` · <span class="chip warn">${nw} aviso${nw>1?'s':''}</span>`:''}</summary>`})()}
      <div class="ref">
       ${checks.filter(c=>c[0]==='w').map(([k,m])=>`<div class="warnln">${esc(m)}</div>`).join('')}
@@ -689,7 +709,7 @@ function render(errs){
       </tbody></table></div>
       <div class="src">Nx sugerido pela proporção das quantidades; altere para fixar. As células amarelas são editáveis.</div>
      </div></details>`;
-    PARTS.push({fb,mlab,M,lo,folhas,body,papel,cores,lados,caixa,eqBtn,conf});
+    PARTS.push({fb,mlab,M,lo,folhas,body,papel,cores,lados,caixa,eqBtn,conf,eqOpts});
   });
   html+=`<div class="expbar"><span class="src">Exportar o material:</span><button class="btn" data-exp="xlsx">Planilha (.xlsx)</button><button class="btn" data-exp="pdf">PDF</button><button class="btn pri" data-exp="gs">Enviar p/ Google Sheets</button><button class="btn mini" data-exp="gsurl" title="Configurar o link do script">⚙</button><span class="src" id="expmsg"></span></div>`;
   const BYFB=[];PARTS.forEach(p=>{let g=BYFB.find(x=>x.fb===p.fb);if(!g){g={fb:p.fb,parts:[]};BYFB.push(g);}g.parts.push(p);});
@@ -704,7 +724,7 @@ function render(errs){
       <span class="ocbox">${parts.map(p=>`<label class="src">OC${multi?' '+esc(p.mlab):''}: <input class="ofb ocin" data-ock="${esc(ocK(p))}" value="${esc(OCS[ocK(p)]||'')}" placeholder="nº da OC" aria-label="Ordem de compra ${esc(p.mlab||'')}"></label>`).join(' ')}</span><button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button><button class="btn" data-orc="${gi}">Enviar p/ orçamento</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">${esc(fbLabel(fb))}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
-     ${parts.map(p=>p.conf).join('')}</div>`;
+     ${parts.map(p=>p.eqOpts||'').join('')}${parts.map(p=>p.conf).join('')}</div>`;
   });
   box.innerHTML=html;
 }
@@ -723,6 +743,9 @@ mmout.addEventListener('change',e=>{const d=e.target.dataset;
   if(f!=null){ITEMS[f].fbSel=e.target.value;ITEMS[f].fb=e.target.value;ITEMS.forEach(i=>i.nxMan=null);render([]);}});
 mmout.addEventListener('focusout',e=>{const cx=e.target.dataset&&e.target.dataset.cx;if(cx){try{localStorage.setItem('bm-cx2-'+cx,e.target.innerText.trim())}catch(x){}}});
 mmout.addEventListener('click',async e=>{
+  const eo=e.target.closest('[data-eqopt]');if(eo){const E=EQOPTS[eo.dataset.eqopt];if(!E)return;const r=E.ops[+eo.dataset.eqj];const its=E.idx.map(x=>ITEMS[x]);
+    its.forEach((i,k)=>{const before=i.unid;i.nxMan=r.nx[k];i.unid=r.q[k];i.qSrc='informada';i.qNote=before!==r.q[k]?`ajustado de ${fmt(before)} para ${fmt(r.q[k])} un para igualar folhas`:'';});
+    EQLOG=`Opção escolhida: todos fecham em ${fmt(r.F)} folhas. `+its.map((i,k)=>{const p=i.mult||1;return `${i.cod}: ${r.q0[k]===r.q[k]?'mantido':fmt(r.q0[k]/p)+' → '+fmt(r.q[k]/p)+' '+(i.mult?'cx/pct':'un')}`}).join(' · ');render([]);return;}
   const eq=e.target.closest('[data-eq]');if(eq){const sel=new Set(eq.dataset.eqi.split(',').map(Number));
     const its=ITEMS.filter((i,ix)=>sel.has(ix)&&!i.aprov&&i.nx&&i.unid);if(!its.length)return;
     const rm=equalize(its,false),rc=equalize(its,true);const dif=r=>r.q.reduce((a,v,k)=>a+Math.abs(v-r.q0[k]),0);
