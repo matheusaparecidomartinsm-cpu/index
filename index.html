@@ -165,6 +165,7 @@ label.chk.novo{white-space:nowrap}
 input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink)}
 .txbox{background:#FFFF00;color:#000;font:bold 8pt Tahoma,Verdana,sans-serif;padding:8px 10px;border-radius:4px;white-space:pre-wrap;margin-top:12px}
 .eqopts{margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;font-size:13px}.eqop{margin-top:6px}
+.reco{margin:10px 0;padding:10px 12px;border:1px solid rgba(45,212,191,.45);border-radius:12px;font-size:13px}.recoi{margin-top:8px}.hcard{margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:12px}
 .btn.mini{padding:3px 10px;font-size:12px}
 .ofbrow{display:flex;gap:4px;margin-top:4px}
 .expbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:16px}
@@ -182,6 +183,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
     <button role="tab" data-tab="mm" aria-selected="true">Montar material</button>
     <button role="tab" data-tab="os" aria-selected="false">Montagens por O.S.</button>
     <button role="tab" data-tab="fb" aria-selected="false">FBs</button>
+    <button role="tab" data-tab="hist" aria-selected="false">Histórico de orçamentos</button>
     <button role="tab" data-tab="regras" aria-selected="false">Regras e divergências</button>
   </nav>
   <div class="controls" id="ctl-os" hidden>
@@ -213,6 +215,7 @@ input.ofb{width:92px;font:600 13px "Manrope",system-ui,sans-serif;padding:4px 8p
   </section>
   <section id="tab-os" hidden><div class="count" id="cnt"></div><div id="list"></div><button class="more" id="more" hidden>Mostrar mais</button></section>
   <section id="tab-fb" hidden><div class="count" id="cntfb"></div><div class="fbgrid" id="fblist"></div><button class="more" id="morefb" hidden>Mostrar mais</button></section>
+  <section id="tab-hist" hidden><div class="mm-in"><input type="search" id="hq" placeholder="Busque por código, produto, FB ou OC" autocomplete="off"><div class="controls"><button class="btn" id="hexp">Baixar histórico (.json)</button><button class="btn" id="himp">Importar histórico</button><input type="file" id="hfile" accept=".json" hidden><span class="src" id="hmsg"></span></div></div><div id="hlist"></div></section>
   <section id="tab-regras" hidden>
     <div class="doc">
       <section>
@@ -357,9 +360,9 @@ function runfb(){const q=norm(document.getElementById('qfb').value).split(/\s+/)
   document.getElementById('cntfb').textContent=`${fres.length} FB${fres.length===1?'':'s'}, ordenadas pela quantidade de O.S.; as sem O.S. vêm do cadastro de facas`;}
 function morefb(){const n=fres.slice(fshown,fshown+30);document.getElementById('fblist').insertAdjacentHTML('beforeend',n.map(fbcard).join(''));fshown+=n.length;document.getElementById('morefb').hidden=fshown>=fres.length;}
 function tab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
-  ['mm','os','fb','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
+  ['mm','os','fb','hist','regras'].forEach(x=>document.getElementById('tab-'+x).hidden=x!==t);
   document.getElementById('ctl-os').hidden=t!=='os';document.getElementById('ctl-fb').hidden=t!=='fb';
-  try{localStorage.setItem('bm-tab2',t)}catch(e){}}
+  if(t==='hist')renderHist();try{localStorage.setItem('bm-tab2',t)}catch(e){}}
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 let tm;['q','qfb'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(id==='q'?run:runfb,150)}));
 ['setor','fap','fdiv'].forEach(id=>document.getElementById(id).onchange=run);
@@ -476,6 +479,34 @@ let PAPL=null;const papList=()=>{if(!PAPL)PAPL=[...new Set(Object.values(byCode)
 const isFranq=n=>FRANQ.test(String(n||''));
 document.addEventListener('change',e=>{const s=e.target.closest&&e.target.closest('.papsel');if(!s)return;if(s.value)PAPSAV[s.dataset.pap]=s.value;else delete PAPSAV[s.dataset.pap];savePap();render([]);});
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-papsave]');if(!b)return;const idx=b.dataset.papsave;const v=(document.getElementById('pp'+idx).value||'').trim();if(!v)return;const it=ITEMS[idx];if(!PAPX.includes(v))PAPX.push(v);PAPSAV[it.cod]=v;savePap();render([]);},true);
+
+// ===== Histórico de orçamentos =====
+let HIST=[];try{HIST=JSON.parse(localStorage.getItem('bm-hist')||'[]')}catch(e){}
+const saveHist=()=>{try{localStorage.setItem('bm-hist',JSON.stringify(HIST))}catch(e){}};
+function addHist(row,fb,enviado){const its=ITEMS.filter(i=>i._g&&i._g.fb===fb);const fl=(row[1].match(/Imprimir\s+([\d.]+)\s+Folhas/i)||row[1].match(/=\s*([\d.]+)\s+Folhas/i)||[])[1];
+  HIST.unshift({id:Date.now()+''+Math.random().toString(36).slice(2,6),data:new Date().toISOString(),enviado,faca:row[0],nome:row[1],papel:row[2],cores:row[3],lado:row[4],caixa:row[5],fb,folhas:fl?+fl.replace(/\./g,''):null,
+    oc:(row[1].match(/--OC:\s*(\S+)/)||[])[1]||'',valor:'',obs:'',itens:its.map(i=>({cod:i.cod,nome:i.nome,nx:i.nx,unid:i.unid,mult:i.mult||1,aprov:!!i.aprov}))});saveHist();}
+const dBR=s=>{const d=new Date(s);return d.toLocaleDateString('pt-BR')};
+function histFor(cod){return HIST.filter(h=>h.itens.some(i=>i.cod===cod));}
+function recoBox(){const cods=[...new Set(ITEMS.map(i=>i.cod))];const rs=cods.map(c=>[c,histFor(c)]).filter(x=>x[1].length);if(!rs.length)return '';
+  return `<div class="reco"><b>Já orçado antes: recomendação</b>${rs.map(([c,hs])=>{const h=hs[0];const me=h.itens.find(i=>i.cod===c);const it=ITEMS.find(i=>i.cod===c);const outros=h.itens.filter(i=>i.cod!==c);
+    const vals=hs.filter(x=>x.valor).map(x=>`${dBR(x.data)}: ${esc(x.valor)}`);
+    return `<div class="recoi"><b>${esc(c)}</b> ${esc((it&&it.nome)||me.nome)} · orçado ${hs.length}x, último em ${dBR(h.data)}<br>
+      Recomendo repetir: <b>${esc(h.faca)}</b>, ${me.nx}x, ${h.folhas?fmt(h.folhas)+' folhas, ':''}${fmt(me.unid)} un (${fmt(me.unid/(me.mult||1))} cx), papel ${esc(h.papel)}${outros.length?`, junto com ${outros.map(o=>esc(o.cod)+' '+o.nx+'x').join(' + ')}`:''}${h.oc?` · OC ${esc(h.oc)}`:''}
+      ${vals.length?`<br>Valores orçados: ${vals.join(' · ')}`:'<br><span class="src">Sem valor registrado. Anote o valor na aba Histórico de orçamentos quando o orçamento voltar.</span>'}
+      <br><button class="btn mini" data-hreco="${esc(c)}" data-hid="${esc(h.id)}">Usar a mesma FB e Nx</button></div>`}).join('')}</div>`;}
+function renderHist(){const q=norm(document.getElementById('hq').value||'');const L=HIST.filter(h=>!q||norm([h.faca,h.nome,h.oc,h.papel,h.itens.map(i=>i.cod+' '+i.nome).join(' ')].join(' ')).includes(q));
+  document.getElementById('hlist').innerHTML=L.length?L.map(h=>`<article class="hcard"><div class="sub">${dBR(h.data)} · ${h.enviado?'enviado ao orçamento':'salvo'}${h.oc?' · OC '+esc(h.oc):''}</div>
+    <table class="os"><tbody><tr><td>${esc(h.faca)}</td><td class="nm">${esc(h.nome)}</td><td>${esc(h.papel)}</td><td>${esc(h.cores)}</td><td>${esc(h.lado)}</td><td>${esc(h.caixa)}</td></tr></tbody></table>
+    <div class="controls"><label class="src">Valor orçado: <input class="ofb hval" data-hv="${esc(h.id)}" value="${esc(h.valor)}" placeholder="ex.: R$ 0,085/un"></label><label class="src">Obs: <input class="ofb hobs" data-ho="${esc(h.id)}" value="${esc(h.obs)}" placeholder="fornecedor, prazo…"></label><button class="btn mini" data-hdel="${esc(h.id)}">Excluir</button></div></article>`).join(''):'<p class="sub">Nenhum orçamento no histórico ainda. Ele é preenchido quando você clica em Enviar p/ orçamento ou Salvar no histórico.</p>';}
+document.getElementById('hq').addEventListener('input',renderHist);
+document.getElementById('hlist').addEventListener('change',e=>{const v=e.target.dataset.hv,o=e.target.dataset.ho;const h=HIST.find(x=>x.id===(v||o));if(!h)return;if(v)h.valor=e.target.value.trim();else h.obs=e.target.value.trim();saveHist();});
+document.getElementById('hlist').addEventListener('click',e=>{const d=e.target.closest('[data-hdel]');if(!d)return;if(!confirm('Excluir este orçamento do histórico?'))return;HIST=HIST.filter(h=>h.id!==d.dataset.hdel);saveHist();renderHist();});
+document.getElementById('hexp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(HIST,null,1)],{type:'application/json'}));a.download='historico-orcamentos.json';a.click();};
+document.getElementById('himp').onclick=()=>document.getElementById('hfile').click();
+document.getElementById('hfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const arr=JSON.parse(await f.text());const ids=new Set(HIST.map(h=>h.id));let n=0;arr.forEach(h=>{if(h&&h.id&&!ids.has(h.id)){HIST.push(h);n++;}});HIST.sort((a,b)=>b.data.localeCompare(a.data));saveHist();renderHist();document.getElementById('hmsg').textContent=n+' orçamento(s) importado(s).';}catch(x){document.getElementById('hmsg').textContent='Arquivo inválido.';}e.target.value='';};
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-hreco]');if(!b)return;const h=HIST.find(x=>x.id===b.dataset.hid);const it=ITEMS.find(i=>i.cod===b.dataset.hreco);if(!h||!it)return;const me=h.itens.find(i=>i.cod===it.cod);
+  if(h.fb){it.fb=h.fb;it.fbSel=h.fb;if(!it.cands.includes(h.fb))it.cands=[h.fb,...it.cands];}it.nxMan=me.nx;render([]);},true);
 let OCS={};document.addEventListener('change',e=>{const c=e.target.closest&&e.target.closest('.ocin');if(!c)return;const v=c.value.trim();if(v)OCS[c.dataset.ock]=v;else delete OCS[c.dataset.ock];render([]);});
 let ITEMS=[];const OPENCONF=new Set();
 function montar(){
@@ -630,7 +661,7 @@ function render(errs){
         <div class="askmulti"><span class="src">Outra FB:</span><input class="ofb" id="ofb${idx}" placeholder="ex.: 2486" aria-label="Outra FB para ${esc(i.cod)}"><input class="ofb" id="omd${idx}" type="number" min="1" placeholder="moldes" aria-label="Moldes da outra FB"><button class="btn" data-other="${idx}">Usar esta FB</button><span class="src">ou</span><button class="btn" data-nova="${idx}" title="Use os moldes digitados ao lado">Faca Nova</button></div>
         <div class="askmulti"><span class="src">Usar mais de uma FB:</span>${i.cands.map(fb=>`<label class="chk"><input type="checkbox" data-mfb="${idx}" value="${esc(fb)}"> ${esc(fb)}</label>`).join('')}<button class="btn" data-msplit="${idx}">Dividir entre as marcadas</button></div></div>`}).join('')}
     </div>`;
-    box.innerHTML=html;return;
+    box.innerHTML=recoBox()+html;return;
   }
   const mlist=[];Object.entries(groups).forEach(([fb,its])=>{const M=getM(fb);
     if(its.some(i=>i.mont)){const by={};its.forEach(i=>{const m=i.mont||1;(by[m]=by[m]||[]).push(i);});const ks=Object.keys(by).map(Number).sort((x,y)=>x-y);
@@ -721,12 +752,12 @@ function render(errs){
     const caixa=uniq(parts.map(p=>p.caixa)).join(' / ');const M=p0.M,lo=p0.lo;
     html+=`<div class="mmgrp" data-g="${gi}">
      <div class="mmbar"><h3>${esc(fbLabel(fb))}${multi?` <span class="chip">${parts.length} montagens</span>`:''}</h3><span class="sub">${M?M+' moldes'+(CUSTOM_M[fb]?' (informado)':''):'<span class="warnln">moldes não encontrados</span>'} <input class="ofb" id="md${gi}" type="number" min="1" placeholder="moldes" value="${CUSTOM_M[fb]||''}" aria-label="Moldes da FB ${esc(fb)}"><button class="btn mini" data-setm="${esc(fb)}" data-gi="${gi}">${M?'alterar':'definir'} moldes</button>${lo?` · última O.S. ${lo.os} · faca O.S. ${esc(lo.faca[0]||'—')}`:''}${(CADBYFB[fb]||[]).length?` · cadastro ${esc(CADBYFB[fb].map(c=>c.t).join(', '))}`:''}</span>
-      <span class="ocbox">${parts.map(p=>`<label class="src">OC${multi?' '+esc(p.mlab):''}: <input class="ofb ocin" data-ock="${esc(ocK(p))}" value="${esc(OCS[ocK(p)]||'')}" placeholder="nº da OC" aria-label="Ordem de compra ${esc(p.mlab||'')}"></label>`).join(' ')}</span><button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button><button class="btn" data-orc="${gi}">Enviar p/ orçamento</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
+      <span class="ocbox">${parts.map(p=>`<label class="src">OC${multi?' '+esc(p.mlab):''}: <input class="ofb ocin" data-ock="${esc(ocK(p))}" value="${esc(OCS[ocK(p)]||'')}" placeholder="nº da OC" aria-label="Ordem de compra ${esc(p.mlab||'')}"></label>`).join(' ')}</span><button class="btn pri" data-copy="${gi}">Copiar para o Excel</button><button class="btn" data-gsone="${gi}">Enviar p/ Google Sheets</button><button class="btn" data-orc="${gi}" data-hfb="${esc(fb)}">Enviar p/ orçamento</button><button class="btn mini" data-hsave="${gi}" data-hfb="${esc(fb)}" title="Guardar no histórico sem enviar e-mail">Salvar no histórico</button>${parts.map(p=>p.eqBtn).join('')}<span class="src" id="cpmsg${gi}"></span></div>
      <div class="xl"><table class="os" id="xt${gi}"><thead><tr><th>Faca</th><th>Nome</th><th>Tipo Papel</th><th>Impressão</th><th>Lado Papel</th><th>Caixa De Embarque</th></tr></thead>
      <tbody><tr><td contenteditable="true">${esc(fbLabel(fb))}</td><td class="nm" contenteditable="true">${esc(nome)}</td><td contenteditable="true">${esc(papel)}</td><td contenteditable="true">${esc(cores.join(' / ')||'A confirmar')}</td><td contenteditable="true">${esc(lados.join(' / ')||'A confirmar')}</td><td contenteditable="true" data-cx="${esc(fb)}">${esc(caixa)}</td></tr></tbody></table></div>
      ${parts.map(p=>p.eqOpts||'').join('')}${parts.map(p=>p.conf).join('')}</div>`;
   });
-  box.innerHTML=html;
+  box.innerHTML=recoBox()+html;
 }
 const mmout=document.getElementById('mmout');
 mmout.addEventListener('toggle',e=>{const c=e.target.dataset&&e.target.dataset.conf;if(c!=null){e.target.open?OPENCONF.add(c):OPENCONF.delete(c);}},true);
@@ -776,7 +807,8 @@ mmout.addEventListener('click',async e=>{
     const md=it.cod.split('.')[0];ITEMS.forEach(o=>{if(o!==it&&!o.fb&&!o.aprov&&o.cands.length>1&&o.cod.split('.')[0]===md&&o.cands.includes(fb)){o.fb=fb;o.fbSel=fb;}});
     ITEMS.forEach(x=>x.nxMan=null);applyRoles();render([]);return;}
   const oc=e.target.closest('[data-orc]');if(oc){const tb=document.getElementById('xt'+oc.dataset.orc);if(!tb)return;const row=[...tb.querySelectorAll('tbody td')].map(td=>td.innerText.trim());
-    if(!confirm('Enviar esta montagem por e-mail para orcamento, orcamento2 e orcamento3@tuicial.com.br?'))return;sendGS(false,[row],'cpmsg'+oc.dataset.orc,'email');return;}
+    if(!confirm('Enviar esta montagem por e-mail para orcamento, orcamento2 e orcamento3@tuicial.com.br?'))return;addHist(row,oc.dataset.hfb,true);sendGS(false,[row],'cpmsg'+oc.dataset.orc,'email');return;}
+  const hsv=e.target.closest('[data-hsave]');if(hsv){const tb=document.getElementById('xt'+hsv.dataset.hsave);if(!tb)return;addHist([...tb.querySelectorAll('tbody td')].map(td=>td.innerText.trim()),hsv.dataset.hfb,false);document.getElementById('cpmsg'+hsv.dataset.hsave).textContent='Salvo no histórico de orçamentos.';render([]);return;}
   const g1=e.target.closest('[data-gsone]');if(g1){const tb=document.getElementById('xt'+g1.dataset.gsone);sendGS(false,tb?[[...tb.querySelectorAll('tbody td')].map(td=>td.innerText.trim())]:null,'cpmsg'+g1.dataset.gsone);return;}
   const ex=e.target.closest('[data-exp]');if(ex){if(ex.dataset.exp==='gs'||ex.dataset.exp==='gsurl'){sendGS(ex.dataset.exp==='gsurl');return;}exportMat(ex.dataset.exp);return;}
   const os=e.target.closest('.linkos');if(os){document.getElementById('q').value=os.dataset.os;tab('os');run();window.scrollTo(0,0);return;}
